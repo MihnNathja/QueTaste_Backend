@@ -1,0 +1,3 @@
+Chứa các hàm tiện ích (helper functions) dùng lại nhiều lần.
+
+Ví dụ: format ngày tháng, upload file, gửi email, generate token.

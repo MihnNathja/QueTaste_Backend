@@ -1,0 +1,5 @@
+Chứa các schema của MongoDB (Mongoose).
+
+Mỗi file đại diện cho một collection (User, Post, Comment…).
+
+Định nghĩa dữ liệu lưu trữ trong DB.
