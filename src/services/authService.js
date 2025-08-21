@@ -1,0 +1,79 @@
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs");
+const User = require("../models/User");
+const Otp = require("../models/Otp");
+const sendOtpMail = require("../utils/sendMail");
+
+// Helper: tạo token
+const generateToken = (userId) => {
+    const accessToken = jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: "15m" });
+    const refreshToken = jwt.sign({ id: userId }, process.env.JWT_REFRESH_SECRET, { expiresIn: "7d" });
+    return { accessToken, refreshToken };
+};
+
+// Helper: random OTP 6 số
+const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
+
+class AuthService {
+    static async login(email, password) {
+        const user = await User.findOne({ email });
+        if (!user) throw new Error("User not found");
+
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) throw new Error("Invalid credentials");
+
+        return generateToken(user._id);
+    }
+
+    static async refresh(token) {
+        return new Promise((resolve, reject) => {
+        jwt.verify(token, process.env.JWT_REFRESH_SECRET, (err, decoded) => {
+            if (err) return reject(new Error("Invalid refresh token"));
+                const accessToken = jwt.sign({ id: decoded.id }, process.env.JWT_SECRET, { expiresIn: "15m" });
+                resolve({ accessToken });
+            });
+        });
+    }
+
+    static async register(name, email, password) {
+        const existingUser = await User.findOne({ email });
+
+        if (existingUser && existingUser.isVerified) {
+            throw new Error("Email already registered");
+        }
+
+        if (!existingUser) {
+            const hashedPassword = await bcrypt.hash(password, 10);
+            await User.create({ name, email, password: hashedPassword, isVerified: false });
+        }
+
+        const existingOtp = await Otp.findOne({ email }).sort({ createdAt: -1 });
+
+        if (existingOtp && existingOtp.expiresAt > Date.now()) {
+            return { resend: true, expiresAt: existingOtp.expiresAt };
+        }
+
+        await Otp.deleteMany({ email });
+
+        const otp = generateOtp();
+        const expiresAt = new Date(Date.now() + 1 * 60 * 1000);
+
+        await Otp.create({ email, otp, expiresAt });
+        await sendOtpMail(email, otp);
+
+        return { resend: !!existingUser };
+    }
+
+    static async verifyOtp(email, otp) {
+        const record = await Otp.findOne({ email, otp });
+        if (!record) throw new Error("Invalid OTP");
+        if (record.expiresAt < Date.now()) throw new Error("OTP expired");
+
+        await User.updateOne({ email }, { $set: { isVerified: true } });
+        await Otp.deleteOne({ _id: record._id });
+
+        return true;
+    }
+}
+
+module.exports = AuthService;
