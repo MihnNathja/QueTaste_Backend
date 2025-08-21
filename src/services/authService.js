@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 const User = require("../models/User");
 const Otp = require("../models/Otp");
 const sendOtpMail = require("../utils/sendMail");
@@ -74,6 +75,32 @@ class AuthService {
 
         return true;
     }
+
+    static async forgotPassword(email) {
+        const user = await User.findOne({ email });
+        if (!user) throw new Error("User not found");
+
+        const otp = generateOtp();
+        const expiresAt = new Date(Date.now() + 2 * 60 * 1000); // 2 phút
+
+        await Otp.create({ email, otp, expiresAt });
+        await sendOtpMail(email, otp);
+
+        return { message: "OTP sent to your email" };
+    }
+
+    static async resetPassword(email, otp, newPassword) {
+        const record = await Otp.findOne({ email, otp });
+        if (!record) throw new Error("Invalid OTP");
+        if (record.expiresAt < Date.now()) throw new Error("OTP expired");
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        await User.updateOne({ email }, { $set: { password: hashedPassword } });
+        await Otp.deleteOne({ _id: record._id });
+
+        return { message: "Password reset successfully" };
+    }
+
 }
 
 module.exports = AuthService;

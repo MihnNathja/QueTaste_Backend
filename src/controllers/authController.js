@@ -29,7 +29,6 @@ exports.register = async (req, res) => {
     try {
         const { name, email, password } = req.body;
         const result = await AuthService.register(name, email, password);
-    
         if (result.resend) {
             return res.status(200).json({ message: "OTP resent to your email" });
         } else {
@@ -48,5 +47,27 @@ exports.verifyOtp = async (req, res) => {
         res.json({ message: "Account verified successfully" });
     } catch (err) {
         res.status(400).json({ message: err.message });
+    }
+};
+
+// POST /auth/forgot-password
+exports.forgotPassword = async (req, res) => {
+    try {
+        const { email } = req.body;
+        const result = await AuthService.forgotPassword(email);
+        return sendResponse(res, 200, true, result.message);
+    } catch (err) {
+        return sendResponse(res, 400, false, err.message);
+    }
+};
+
+// POST /auth/reset-password
+exports.resetPassword = async (req, res) => {
+    try {
+        const { email, otp, newPassword } = req.body;
+        const result = await AuthService.resetPassword(email, otp, newPassword);
+        return sendResponse(res, 200, true, result.message);
+    } catch (err) {
+        return sendResponse(res, 400, false, err.message);
     }
 };
