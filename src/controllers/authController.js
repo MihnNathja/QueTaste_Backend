@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken")
 const bcrypt = require("bcryptjs")
+const crypto = require("crypto");
 const User = require("../models/User");
 const Otp = require("../models/Otp");
 const sendResponse = require("../utils/response");
@@ -49,16 +50,20 @@ exports.refresh = async (req, res) => {
 }
 
 // Helper: random OTP 6 s?
-const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
+// const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
+//LÃ½ do comment: HÃ m random quÃ¡ lá»
+const generateOtp = () => {
+  return crypto.randomInt(100000, 1000000).toString(); // sá»‘ tá»« 100000 â†’ 999999
+};
 
-// ?? Ðang ký (Register ho?c Resend OTP n?u chua verify)
+// ?? ï¿½ang kï¿½ (Register ho?c Resend OTP n?u chua verify)
 exports.register = async (req, res) => {
     try {
         const { name, email, password } = req.body;
 
         const existingUser = await User.findOne({ email });
 
-        // Case 1: User dã t?n t?i & verified
+        // Case 1: User dï¿½ t?n t?i & verified
         if (existingUser && existingUser.isVerified) {
             return res.status(400).json({ message: "Email already registered" });
         }
@@ -74,18 +79,18 @@ exports.register = async (req, res) => {
             });
         }
 
-        // Case 3: User dã t?n t?i nhung chua verify
+        // Case 3: User dï¿½ t?n t?i nhung chua verify
         const existingOtp = await Otp.findOne({ email }).sort({ createdAt: -1 });
 
         if (existingOtp && existingOtp.expiresAt > Date.now()) {
-            // OTP còn h?n ? không g?i m?i
+            // OTP cï¿½n h?n ? khï¿½ng g?i m?i
             return res.status(400).json({
                 message: "OTP has already been sent. Please check your email.",
                 expiresAt: existingOtp.expiresAt,
             });
         }
 
-        // N?u không có OTP ho?c dã h?t h?n ? t?o m?i
+        // N?u khï¿½ng cï¿½ OTP ho?c dï¿½ h?t h?n ? t?o m?i
         await Otp.deleteMany({ email });
 
         const otp = generateOtp();
@@ -95,7 +100,7 @@ exports.register = async (req, res) => {
 
         await sendOtpMail(email, otp);
 
-        // Tr? v? khác nhau cho rõ nghia
+        // Tr? v? khï¿½c nhau cho rï¿½ nghia
         if (existingUser) {
             return res.status(200).json({ message: "OTP resent to your email" });
         } else {
@@ -108,7 +113,7 @@ exports.register = async (req, res) => {
     }
 };
 
-// ?? Xác th?c OTP
+// ?? Xï¿½c th?c OTP
 exports.verifyOtp = async (req, res) => {
     try {
         const { email, otp } = req.body;
@@ -125,12 +130,56 @@ exports.verifyOtp = async (req, res) => {
         // Update user verified
         await User.updateOne({ email }, { $set: { isVerified: true } });
 
-        // Xoá OTP sau khi dùng
+        // Xoï¿½ OTP sau khi dï¿½ng
         await Otp.deleteOne({ _id: record._id });
 
         res.json({ message: "Account verified successfully" });
     } catch (error) {
         console.error("Verify OTP error:", error);
         res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+exports.forgotPassword = async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        const user = await User.findOne({ email });
+        if (!user) return sendResponse(res, 404, false, "ERROR");
+
+        const otp = generateOtp();
+        const expiresAt = new Date(Date.now() + 2 * 60 * 1000); // háº¿t háº¡n sau 2 phÃºt
+
+        await Otp.create({ email, otp, expiresAt });
+
+        await sendOtpMail(email, otp);
+
+        return sendResponse(res, 200, true, "OTP sent to your email");
+    } catch (err) {
+        return sendResponse(res, 500, false, err.message);
+    }
+};
+
+exports.resetPassword = async (req, res) => {
+    try {
+        const { email, otp, newPassword } = req.body;
+
+        const record = await Otp.findOne({ email, otp });
+        if (!record) {
+            return sendResponse(res, 400, false, "Invalid OTP");
+        }
+
+        if (record.expiresAt < Date.now()) {
+            return sendResponse(res, 400, false, "OTP expired");
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        await User.updateOne({ email }, { $set: { password: hashedPassword } });
+
+        await Otp.deleteOne({ _id: record._id });
+
+        return sendResponse(res, 200, true, "Password reset successfully");
+    } catch (err) {
+        return sendResponse(res, 500, false, err.message);
     }
 };
