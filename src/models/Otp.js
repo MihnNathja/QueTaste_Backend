@@ -18,7 +18,7 @@ const otpSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
-// Tự động xoá OTP khi hết hạn
+// T? d?ng xo� OTP khi h?t h?n
 otpSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 module.exports = mongoose.model("Otp", otpSchema);
