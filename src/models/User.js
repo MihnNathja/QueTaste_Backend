@@ -1,6 +1,5 @@
 const mongoose = require("mongoose");
 
-
 const personalInfoSchema = new mongoose.Schema(
     {
         firstName: { type: String },
@@ -33,6 +32,5 @@ const userSchema = new mongoose.Schema(
     },
     { timestamps: true }
 );
-
 
 module.exports = mongoose.model("User", userSchema);
