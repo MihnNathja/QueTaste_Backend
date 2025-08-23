@@ -2,13 +2,7 @@ const jwt = require("jsonwebtoken")
 const bcrypt = require("bcryptjs")
 const User = require("../models/User");
 const sendResponse = require("../utils/response");
-
-// Tao token
-const generateToken = (userId) => {
-    const accessToken = jwt.sign({id: userId}, process.env.JWT_SECRET, {expiresIn: "15m"});
-    const refreshToken = jwt.sign({id: userId}, process.env.JWT_REFRESH_SECRET, {expiresIn: "7d"});
-    return {accessToken, refreshToken};
-};
+const generateToken = require("../utils/jwt");
 
 // POST /auth/login
 exports.login = async (req, res) =>{
@@ -32,13 +26,13 @@ exports.login = async (req, res) =>{
 // POST /auth/refresh
 exports.refresh = async (req, res) => {
     try {
-        const { token } = req.body;
-        if (!token) return sendResponse(res, 401, false, "No token provided");
+        const { refreshToken } = req.body;
+        if (!refreshToken) return sendResponse(res, 401, false, "No token provided");
 
-        jwt.verify(token, process.env.JWT_REFRESH_SECRET, (err, decoded) => {
+        jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET, (err, decoded) => {
             if (err) return sendResponse(res, 403, false, "Invalid refresh token");
 
-            const accessToken = jwt.sign({id: decaded.id}, process.env.JWT_SECRET, {expiresIn: "15m"});
+            const accessToken = jwt.sign({id: decoded.id}, process.env.JWT_SECRET, {expiresIn: "15m"});
             return sendResponse(res, 200, true, "Token refreshed successfully", { accessToken });
         });
     } catch (err){
