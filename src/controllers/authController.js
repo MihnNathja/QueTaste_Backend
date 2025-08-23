@@ -29,24 +29,25 @@ exports.register = async (req, res) => {
     try {
         const { name, email, password } = req.body;
         const result = await AuthService.register(name, email, password);
+
         if (result.resend) {
-            return res.status(200).json({ message: "OTP resent to your email" });
+            return sendResponse(res, 200, true, "OTP resent to your email");
         } else {
-            return res.status(201).json({ message: "User registered. OTP sent to email." });
+            return sendResponse(res, 201, true, "User registered. OTP sent to email.");
         }
-        } catch (err) {
-            return res.status(400).json({ message: err.message });
-        }
-    };
-    
+    } catch (err) {
+        return sendResponse(res, 400, false, err.message);
+    }
+};
+
 // POST /auth/verify-otp
 exports.verifyOtp = async (req, res) => {
     try {
         const { email, otp } = req.body;
         await AuthService.verifyOtp(email, otp);
-        res.json({ message: "Account verified successfully" });
+        return sendResponse(res, 200, true, "Account verified successfully");
     } catch (err) {
-        res.status(400).json({ message: err.message });
+        return sendResponse(res, 400, false, err.message);
     }
 };
 
