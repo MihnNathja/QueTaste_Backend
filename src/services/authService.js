@@ -4,7 +4,8 @@ const crypto = require("crypto");
 const User = require("../models/User");
 const Otp = require("../models/Otp");
 const sendOtpMail = require("../utils/sendMail");
-const generateToken = require("../utils/jwt");
+const generateToken = require("../utils/jwt")
+const Token = require("../models/Token");
 
 // Helper: random OTP 6 số
 const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
@@ -17,7 +18,11 @@ class AuthService {
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) throw new Error("Invalid credentials");
 
-        return generateToken(user._id);
+        const tokens = generateToken(user._id);
+
+        await Token.create({ userId: user._id, refreshToken: tokens.refreshToken });
+
+        return tokens;
     }
 
     static async refresh(token) {
@@ -28,6 +33,12 @@ class AuthService {
                 resolve({ accessToken });
             });
         });
+    }
+
+    static async logout(userId, refreshToken) {
+        const deleted = await Token.findOneAndDelete({ userId, refreshToken });
+        if (!deleted) throw new Error("Invalid token or already logged out");
+        return { message: "Logout successful" };
     }
 
     static async register(name, email, password) {

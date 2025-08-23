@@ -28,6 +28,22 @@ exports.refresh = async (req, res) => {
     }
 };
 
+// POST /auth/logout
+exports.logout = async (req, res) => {
+    try {
+        const { refreshToken } = req.body;
+        
+        if (!refreshToken) return sendResponse(res, 400, false, "No refresh token provided");
+
+        const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+        const result = await AuthService.logout(decoded.id, refreshToken);
+        
+        return sendResponse(res, 200, true, result.message);
+    } catch (err) {
+        return sendResponse(res, 400, false, err.message);
+    }
+};
+
 // POST /auth/register
 exports.register = async (req, res) => {
     try {
