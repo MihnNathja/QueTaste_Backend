@@ -4,13 +4,7 @@ const crypto = require("crypto");
 const User = require("../models/User");
 const Otp = require("../models/Otp");
 const sendOtpMail = require("../utils/sendMail");
-
-// Helper: tạo token
-const generateToken = (userId) => {
-    const accessToken = jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: "15m" });
-    const refreshToken = jwt.sign({ id: userId }, process.env.JWT_REFRESH_SECRET, { expiresIn: "7d" });
-    return { accessToken, refreshToken };
-};
+const generateToken = require("../utils/jwt");
 
 // Helper: random OTP 6 số
 const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();

@@ -1,4 +1,8 @@
+const jwt = require("jsonwebtoken")
+const bcrypt = require("bcryptjs")
+const User = require("../models/User");
 const sendResponse = require("../utils/response");
+const generateToken = require("../utils/jwt");
 const AuthService = require("../services/authService");
 
 // POST /auth/login
@@ -11,12 +15,12 @@ exports.login = async (req, res) => {
         return sendResponse(res, 400, false, err.message);
     }
 };
-    
+
 // POST /auth/refresh
 exports.refresh = async (req, res) => {
     try {
-        const { token } = req.body;
-        if (!token) return sendResponse(res, 401, false, "No token provided");
+        const { refreshToken } = req.body;
+        if (!refreshToken) return sendResponse(res, 401, false, "No token provided");
         const result = await AuthService.refresh(token);
         return sendResponse(res, 200, true, "Token refreshed successfully", result);
     } catch (err) {
