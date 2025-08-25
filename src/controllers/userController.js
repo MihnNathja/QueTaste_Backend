@@ -11,8 +11,6 @@ exports.getProfile = async (req, res) => {
     }
 };
 
-
-
 exports.updateProfile = async (req, res) => {
   try {
     const userId = req.user.id;

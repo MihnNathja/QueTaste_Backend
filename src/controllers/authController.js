@@ -21,7 +21,7 @@ exports.refresh = async (req, res) => {
     try {
         const { refreshToken } = req.body;
         if (!refreshToken) return sendResponse(res, 401, false, "No token provided");
-        const result = await AuthService.refresh(token);
+        const result = await AuthService.refresh(refreshToken);
         return sendResponse(res, 200, true, "Token refreshed successfully", result);
     } catch (err) {
         return sendResponse(res, 403, false, err.message);
