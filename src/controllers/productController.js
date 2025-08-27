@@ -1,6 +1,7 @@
 const sendResponse = require("../utils/response");
 const ProductService = require("../services/productService");
 
+// GET /product
 exports.getAllProducts = async (req, res) => {
     try {
         const products = await ProductService.getAllProducts(req.query);
@@ -10,6 +11,7 @@ exports.getAllProducts = async (req, res) => {
     }
 };
 
+// GET /product/newest
 exports.getNewestProducts = async (req, res) => {
     try {
         const products = await ProductService.getNewestProducts();
@@ -19,6 +21,7 @@ exports.getNewestProducts = async (req, res) => {
     }
 };
 
+// GET /product/bestselling
 exports.getBestSellingProducts = async (req, res) => {
     try {
         const products = await ProductService.getBestSellingProducts();
@@ -28,6 +31,7 @@ exports.getBestSellingProducts = async (req, res) => {
     }
 };
 
+// GET /product/mostviewed
 exports.getMostViewedProducts = async (req, res) => {
     try {
         const products = await ProductService.getMostViewedProducts();
@@ -37,6 +41,7 @@ exports.getMostViewedProducts = async (req, res) => {
     }
 };
 
+// GET /product/topdiscounted
 exports.getTopDiscountedProducts = async (req, res) => {
     try {
         const products = await ProductService.getTopDiscountedProducts();

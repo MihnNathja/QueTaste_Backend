@@ -21,5 +21,5 @@ app.use("/api/user", userRoutes);
 app.use("/api/product", productRoutes);
 
 // Listen
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8088;
 app.listen(PORT, () => console.log(`?? Server running on port ${PORT}`));
