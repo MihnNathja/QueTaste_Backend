@@ -7,6 +7,7 @@ exports.getProfile = async (req, res) => {
         const user = await User.findById(req.user.id).select("-password -__v");
         return sendResponse(res, 200, true, "User profile retrieved successfully", user);
     } catch (err) {
+        console.log(err);
         return sendResponse(res, 500, false, err.message);
     }
 };
