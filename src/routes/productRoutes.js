@@ -18,4 +18,5 @@ router.get("/mostviewed", productController.getMostViewedProducts);
 // Lấy 04 sản phẩm khuyến mãi cao nhất
 router.get("/topdiscounted", productController.getTopDiscountedProducts);
 
+router.get("/:id", productController.getProductById);
 module.exports = router;

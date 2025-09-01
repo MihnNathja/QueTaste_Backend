@@ -14,7 +14,7 @@ yarn-error.log*
 .env.development.local
 .env.test.local
 .env.production.local
-
+/src/data/
 # Runtime data
 pids
 *.pid

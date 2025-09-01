@@ -11,6 +11,19 @@ exports.getAllProducts = async (req, res) => {
     }
 };
 
+// GET /product/:id
+exports.getProductById = async (req, res) => {
+    try {
+        const product = await ProductService.getProductById(req.params.id);
+        if (!product){
+            return sendResponse(res, 404, false, "Product not found");
+        }
+        return sendResponse(res, 200, true, "Product fetched", product);
+    } catch(err){
+        return sendResponse(res, 500, false, err.message);
+    }
+}
+
 // GET /product/newest
 exports.getNewestProducts = async (req, res) => {
     try {

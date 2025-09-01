@@ -17,6 +17,18 @@ class ProductService {
         return await q;
     }
 
+    static async getProductById(id){
+        const product = await Product.findById(id);
+        if(!product || !product.isActive){
+            throw new Error("Product not found");
+        }
+
+        product.views += 1;
+        await product.save();
+
+        return product;
+    }
+
     static async getNewestProducts() {
         return await Product.find({ isActive: true })
             .sort({ createdAt: -1 })
