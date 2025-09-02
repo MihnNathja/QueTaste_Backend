@@ -11,15 +11,13 @@ exports.getAllPosts = async (req, res) => {
     }
 };
 
-// GET /post/:id
-exports.getPostById = async (req, res) => {
+// GET /post/:slug
+exports.getPostBySlug = async (req, res) => {
     try {
-        const post = await PostService.getPostById(req.params.id);
-        if (!post){
-            return sendResponse(res, 404, false, "Post not found");
-        }
+        const post = await PostService.getPostBySlug(req.params.slug);
         return sendResponse(res, 200, true, "Post fetched", post);
     } catch(err){
-        return sendResponse(res, 500, false, err.message);
+        return sendResponse(res, 404, false, err.message);
     }
 };
+

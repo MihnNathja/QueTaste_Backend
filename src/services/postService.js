@@ -31,6 +31,20 @@ class PostService {
 
         return post;
     }
+
+    static async getPostBySlug(slug) {
+        const post = await Post.findOne({ slug }).populate("author", "personalInfo fullName email avatar");
+
+        if(!post || !post.isPublished){
+            throw new Error("Post not found");
+        }
+
+        // tăng views
+        post.views += 1;
+        await post.save();
+
+        return post;
+    }
 }
 
 module.exports = PostService;
