@@ -6,6 +6,8 @@ const connectDB = require("./src/config/db");
 const authRoutes = require("./src/routes/authRoutes");
 const userRoutes = require("./src/routes/userRoutes");
 const productRoutes = require("./src/routes/productRoutes");
+const postRoutes = require("./src/routes/postRoute");
+
 dotenv.config();
 connectDB();
 
@@ -19,6 +21,7 @@ app.use(cors());
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/product", productRoutes);
+app.use("/api/post", postRoutes);
 
 // Listen
 const PORT = process.env.PORT || 8088;
