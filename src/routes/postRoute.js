@@ -7,6 +7,6 @@ const router = express.Router();
 router.get("/", postController.getAllPosts);
 
 // Lấy chi tiết 1 bài viết
-router.get("/:id", postController.getPostById);
+router.get("/:slug", postController.getPostBySlug);
 
 module.exports = router;
