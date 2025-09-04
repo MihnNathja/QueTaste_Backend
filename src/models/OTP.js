@@ -18,7 +18,7 @@ const otpSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
-// T? d?ng xoá OTP khi h?t h?n
+// T? d?ng xoï¿½ OTP khi h?t h?n
 otpSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 module.exports = mongoose.model("Otp", otpSchema);

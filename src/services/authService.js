@@ -50,7 +50,21 @@ class AuthService {
 
         if (!existingUser) {
             const hashedPassword = await bcrypt.hash(password, 10);
-            await User.create({ name, email, password: hashedPassword, isVerified: false });
+            await User.create({
+                email,
+                password: hashedPassword,
+                isVerified: false, // bạn đã set đúng
+                role: "user",      // default, có thể bỏ nếu muốn
+                avatar: "",        // để rỗng
+                status: "active",  // default
+                personalInfo: {
+                    fullName: name || "",  // thay name vào fullName
+                    phone: "",
+                    address: "",
+                    dateOfBirth: null,
+                    gender: "other",
+                },
+            });
         }
 
         const existingOtp = await Otp.findOne({ email }).sort({ createdAt: -1 });
