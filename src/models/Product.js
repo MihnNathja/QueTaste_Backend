@@ -11,6 +11,10 @@ const productSchema = new mongoose.Schema(
         images: [{ type: String }],                    // array url ảnh
         views: { type: Number, default: 0 },          // lượt xem
         isActive: { type: Boolean, default: true },   // sản phẩm còn bán
+        averageRating: { type: Number, default: 0 },
+        totalReviews: { type: Number, default: 0 },
+        region: { type: String, trim: true },
+        totalSold: { type: Number, default: 0 }, // đơn hàng hoàn tất thì +1
     },
     { timestamps: true } // tự động createdAt & updatedAt
 );
