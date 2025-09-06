@@ -3,18 +3,50 @@ const Order = require("../models/Order");
 
 class ProductService {
     static async getAllProducts(query) {
-        const { page = 1, limit, search = "" } = query;
+        const {
+            page = 1,
+            limit,
+            search = "",
+            category,
+            region,
+            rating,
+            minPrice,
+            maxPrice,
+            sortBy = "createdAt", // createdAt | totalSold | views | price | rating | discount
+            order = "desc", 
+        } = query;
 
-        let q = Product.find({
-            isActive: true,
-            name: { $regex: search, $options: "i" },
-        });
-
-        if (limit) {
-            q = q.skip((page - 1) * limit).limit(parseInt(limit));
+        const filter = { isActive: true };
+        if (search) filter.name = { $regex: search, $options: "i" };
+        if (category) filter.category = category;
+        if (region) filter.region = region;
+        if (rating) filter.averageRating = { $gte: Number(rating) };
+        if (minPrice || maxPrice) {
+            filter.salePrice = {};
+            if (minPrice) filter.salePrice.$gte = Number(minPrice);
+            if (maxPrice) filter.salePrice.$lte = Number(maxPrice);
         }
+            
+        const dir = order === "asc" ? 1 : -1;
+        let sort = { createdAt: -1 };
 
-        return await q;
+        if (sortBy === "totalSold") sort = { totalSold: dir };
+        else if (sortBy === "views") sort = { views: dir };
+        else if (sortBy === "price") sort = { salePrice: dir, price: dir };
+        else if (sortBy === "rating") sort = { averageRating: dir, totalReviews: -1 };
+        else if (sortBy === "createdAt") sort = { createdAt: dir };
+
+        let q = Product.find(filter).sort(sort);
+        if (limit) q = q.skip((page - 1) * limit).limit(parseInt(limit));
+
+        const [products, total] = await Promise.all([q, Product.countDocuments(filter),]);
+
+        return {
+        products,
+        total,
+        currentPage: parseInt(page),
+        totalPage: limit ? Math.ceil(total / limit) : 1,
+        };
     }
 
     static async getProductById(id){
@@ -27,56 +59,6 @@ class ProductService {
         await product.save();
 
         return product;
-    }
-
-    static async getNewestProducts() {
-        return await Product.find({ isActive: true })
-            .sort({ createdAt: -1 })
-            .limit(8);
-    }
-
-    static async getBestSellingProducts() {
-        const result = await Order.aggregate([
-            { $match: { status: "completed" } },
-            { $unwind: "$items" },
-            { $group: { _id: "$items.product", totalSold: { $sum: "$items.quantity" } } },
-            { $sort: { totalSold: -1 } },
-            { $limit: 6 },
-            {
-                $lookup: {
-                    from: "products",
-                    localField: "_id",
-                    foreignField: "_id",
-                    as: "product",
-                },
-            },
-            { $unwind: "$product" }
-        ]);
-        return result.map(r => r.product);
-    }
-
-    static async getMostViewedProducts() {
-        return await Product.find({ isActive: true })
-            .sort({ views: -1 })
-            .limit(8);
-    }
-
-    static async getTopDiscountedProducts() {
-        return await Product.aggregate([
-            { $match: { isActive: true, salePrice: { $gt: 0 } } },
-            {
-                $addFields: {
-                    discountPercent: {
-                        $multiply: [
-                            { $divide: [{ $subtract: ["$price", "$salePrice"] }, "$price"] },
-                            100
-                        ]
-                    }
-                }
-            },
-            { $sort: { discountPercent: -1 } },
-            { $limit: 4 }
-        ]);
     }
 
 }
