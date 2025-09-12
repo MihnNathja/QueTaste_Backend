@@ -68,6 +68,7 @@ class OrderService {
 
         await order.save();
 
+        // COD thì clear cart ngay
         cart.items = [];
         await cart.save();
 
@@ -95,9 +96,7 @@ class OrderService {
         // dùng _id của MongoDB làm orderId
         const orderId = order._id.toString();
 
-        // clear cart ngay để user thấy giỏ hàng rỗng
-        cart.items = [];
-        await cart.save();
+        // 🚨 KHÔNG clear cart ở đây nữa
 
         // gọi API MoMo
         const partnerCode = "MOMO";
@@ -158,11 +157,18 @@ class OrderService {
         if (!order) throw new Error("Order not found");
 
         if (Number(resultCode) === 0) {
-        order.paymentStatus = "paid";
-        order.status = "completed";
+            order.paymentStatus = "paid";
+            order.status = "completed";
+
+            // ✅ clear cart khi thanh toán thành công
+            const cart = await Cart.findOne({ user: order.user });
+            if (cart) {
+                cart.items = [];
+                await cart.save();
+            }
         } else {
-        order.paymentStatus = "failed";
-        order.status = "cancelled";
+            order.paymentStatus = "failed";
+            order.status = "cancelled";
         }
 
         await order.save();
@@ -175,15 +181,21 @@ class OrderService {
         if (!order) throw new Error("Order not found");
 
         if (Number(resultCode) === 0) {
-        order.paymentStatus = "paid";
-        order.status = "completed";
-        } else {
-        order.paymentStatus = "failed";
-        order.status = "cancelled";
-        }
+            order.paymentStatus = "paid";
+            order.status = "completed";
 
-        await order.save();
-        return order;
+            // ✅ clear cart khi thanh toán thành công
+            const cart = await Cart.findOne({ user: order.user });
+            if (cart) {
+                cart.items = [];
+                await cart.save();
+            }
+            await order.save();
+            return order;
+        } else {
+            await Order.deleteOne({ _id: orderId });
+            return null;
+        }
     }
 }
 
