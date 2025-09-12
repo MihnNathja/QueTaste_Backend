@@ -75,6 +75,46 @@ class OrderService {
 
         return order;
     }
+
+    static async getMyOrders(userId, { status, search, page = 1, limit = 10 } = {}) {
+        try {
+            const query = { user: userId };
+
+            if (status && status !== "all") {
+            query.status = status;
+            }
+
+            if (search) {
+            const productIds = await Product.find(
+                { name: { $regex: search, $options: "i" } },
+                { _id: 1 }
+            ).lean();
+
+            const ids = productIds.map(p => p._id);
+
+            query.$or = [
+                { "items.product": { $in: ids } },
+                { "shippingAddress.fullName": { $regex: search, $options: "i" } },
+            ];
+            }
+
+
+            const orders = await Order.find(query)
+            .sort({ createdAt: -1 })
+            .skip((page - 1) * limit)
+            .limit(limit)
+            .populate({
+                path: "items.product",
+                model: "Product",
+                select: "name price salePrice category images averageRating totalReviews",
+            });
+
+            return orders || [];
+        } catch (err) {
+            console.error("Error in getMyOrders:", err.message);
+            throw new Error("Không thể lấy danh sách đơn hàng");
+        }
+    }
 }
 
 module.exports = OrderService;

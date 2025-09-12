@@ -23,7 +23,6 @@ exports.addToCart = async (req, res) => {
             productId,
             quantity || 1
         );
-         console.log("ádasdasdas");
         console.log(cart);
         return sendResponse(res, 200, true, "Product added to cart", cart);
     } catch (err) {

@@ -10,3 +10,25 @@ exports.checkout = async (req, res) => {
         return sendResponse(res, 400, false, err.message);
     }
 };
+
+exports.getMyOrders = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { status, search, page, limit } = req.query;
+    const params = req.query;
+    console.log(params);
+    
+
+    const orders = await OrderService.getMyOrders(userId, {
+      status: status || "all",
+      search: search || "",
+      page: parseInt(page) || 1,
+      limit: parseInt(limit) || 10,
+    });
+    //console.log(orders);
+    return sendResponse(res, 201, true, "Order created successfully", orders);
+  } catch (err) {
+    console.error("Error in getMyOrders controller:", err.message);
+    return sendResponse(res, 400, false, err.message);
+  }
+};
