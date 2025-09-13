@@ -3,8 +3,7 @@ const sendResponse = require("../utils/response");
 
 const authMiddleware = (req, res, next) => {
     const token = req.headers["authorization"]?.split(" ")[1]; //Bearer token
-    console.log("👉 Authorization raw:", req.headers["authorization"]);
-console.log("👉 Extracted token:", token);
+
     if (!token) return sendResponse(res, 401, false, "No token provided");
 
     jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
