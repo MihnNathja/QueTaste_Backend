@@ -1,5 +1,17 @@
 const mongoose = require("mongoose");
 
+const ORDER_STATUS = [
+  "new",                // Đơn hàng mới
+  "confirmed",          // Đã xác nhận
+  "processing",         // Shop chuẩn bị hàng
+  "shipping",           // Đang vận chuyển
+  "delivering",         // Shipper đang giao
+  "completed",          // Giao thành công
+  "cancelled",          // Đã hủy
+  "cancel_requested",   // Khách yêu cầu hủy
+  "refund"              // Hoàn trả / hoàn tiền
+];
+
 const orderSchema = new mongoose.Schema({
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     items: [
@@ -9,8 +21,16 @@ const orderSchema = new mongoose.Schema({
         price: { type: Number, required: true }, // giá bán tại thời điểm đặt
         },
     ],
-    status: { type: String, enum: ["pending", "completed", "canceled"], default: "pending" },
-
+    //status: { type: String, enum: ["pending", "completed", "canceled"], default: "pending" },
+    status: { 
+        type: String, 
+        enum: ORDER_STATUS, 
+        default: "new" 
+    },
+    cancelRequest: {
+        reason: String,
+        requestedAt: Date,
+    },
     // Thanh toán
     paymentMethod: { type: String, default: "cash" },
     paymentStatus: { type: String, enum: ["pending", "paid", "failed"], default: "pending" },
@@ -24,7 +44,7 @@ const orderSchema = new mongoose.Schema({
         postalCode: String,
     },
     shippingFee: { type: Number, default: 0 },
-    deliveryStatus: { type: String, enum: ["pending", "shipping", "delivered", "canceled"], default: "pending" },
+    //deliveryStatus: { type: String, enum: ["pending", "shipping", "delivered", "canceled"], default: "pending" },
 
     // Tổng tiền
     totalAmount: { type: Number, required: true },   // tổng tiền trước giảm
