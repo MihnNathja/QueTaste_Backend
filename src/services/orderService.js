@@ -64,7 +64,7 @@ class OrderService {
         paymentStatus: paymentMethod === "COD" ? "pending" : "paid",
         shippingAddress,
         notes,
-        status: "completed",
+        status: "new",
         });
 
         await order.save();
@@ -78,10 +78,35 @@ class OrderService {
 
     static async getMyOrders(userId, { status, search, page = 1, limit = 10 } = {}) {
         try {
-            const query = { user: userId };
+
+            const query = { user: userId }
 
             if (status && status !== "all") {
-            query.status = status;
+                if (status === "pending")
+                {
+                    query.$or = [
+                        { status: "new" },
+                        { status: "confirmed" }
+                    ];
+                }
+                else if (status === "shipping")
+                {
+                    query.$or = [
+                        { status: "shipping" },
+                        { status: "delivering" }
+                    ];
+                }
+                else if (status === "cancelled")
+                {
+                    query.$or = [
+                        { status: "cancel_requested" },
+                        { status: "cancelled" }
+                    ];
+                }
+                else
+                {
+                    query.status = status;
+                }
             }
 
             if (search) {
@@ -114,6 +139,51 @@ class OrderService {
             console.error("Error in getMyOrders:", err.message);
             throw new Error("Không thể lấy danh sách đơn hàng");
         }
+    }
+
+    static async cancelOrder(userId, orderId) {
+    const order = await Order.findOne({ _id: orderId, user: userId });
+    if (!order) throw new Error("Không tìm thấy đơn hàng");
+
+    const diffMinutes = (Date.now() - order.createdAt.getTime()) / 1000 / 60;
+
+    // Nếu đã vào giai đoạn xử lý hoặc xa hơn
+    if (order.status === "processing") {
+        throw new Error("Đơn hàng đã sang giai đoạn xử lý, vui lòng gửi Yêu cầu hủy");
+    }
+
+    if (["shipping", "delivering", "completed"].includes(order.status)) {
+        throw new Error("Đơn hàng đã qua giai đoạn xử lý, vui lòng gửi Yêu cầu hoàn/trả hàng");
+    }
+
+    // Nếu vẫn còn new/confirmed
+    if (["new", "confirmed"].includes(order.status)) {
+        if (diffMinutes > 30) {
+        throw new Error("Chỉ có thể hủy trong vòng 30 phút sau khi đặt");
+        }
+        order.status = "cancelled";
+        order.cancelledAt = new Date();
+        await order.save();
+        return order; 
+    }
+
+    throw new Error("Không thể hủy đơn này");
+    }
+
+    static async requestCancelOrder(userId, orderId, reason) {
+        const order = await Order.findOne({ _id: orderId, user: userId });
+        if (!order) throw new Error("Không tìm thấy đơn hàng");
+
+        if (["processing"].includes(order.status)) {
+            order.status = "cancel_requested";
+            order.cancelRequest = {
+                reason,
+                requestedAt: new Date(),
+            };
+            await order.save();
+            return order;
+        }
+        throw new Error("Chỉ có thể gửi yêu cầu hủy cho đơn hàng đang vận chuyển hoặc đã giao");
     }
 }
 

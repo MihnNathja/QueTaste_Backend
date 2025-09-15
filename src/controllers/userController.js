@@ -43,7 +43,7 @@ exports.updateProfile = async (req, res) => {
       { new: true } // trả về document đã update
     ).select("-password -__v");
 
-    console.log(updatedUser);
+    //console.log(updatedUser);
     if (!updatedUser) return sendResponse(res, 404, false, "User not found");
 
     return sendResponse(res, 200, true, "Profile updated successfully", updatedUser);

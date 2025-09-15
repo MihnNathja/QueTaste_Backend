@@ -16,7 +16,7 @@ exports.getMyOrders = async (req, res) => {
     const userId = req.user.id;
     const { status, search, page, limit } = req.query;
     const params = req.query;
-    console.log(params);
+    //console.log(params);
     
 
     const orders = await OrderService.getMyOrders(userId, {
@@ -32,3 +32,31 @@ exports.getMyOrders = async (req, res) => {
     return sendResponse(res, 400, false, err.message);
   }
 };
+
+exports.cancelOrder = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    //console.log(userId);
+    const {orderId} = req.params;
+    //console.log(orderId);
+    const order = await OrderService.cancelOrder(userId, orderId);
+    return sendResponse(res, 200, true, "Order cancelled successfully", order);
+  } catch (err) {
+    console.error("Error in cancelOrder controller:", err.message);
+    return sendResponse(res, 400, false, err.message);
+  }
+}
+
+exports.requestCancelOrder = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { orderId } = req.params;
+    const { reason } = req.body;
+    console.log("Requesting cancellation for order:", orderId, "by user:", userId, "with reason:", reason);
+    const order = await OrderService.requestCancelOrder(userId, orderId, reason);
+    return sendResponse(res, 200, true, "Order cancellation requested successfully", order);
+  } catch (err) {
+    console.error("Error in requestCancelOrder controller:", err.message);
+    return sendResponse(res, 400, false, err.message);
+  }
+}
