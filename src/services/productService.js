@@ -1,6 +1,6 @@
 const Product = require("../models/Product");
 const Order = require("../models/Order");
-
+const Review = require("../models/Review");
 class ProductService {
     static async getAllProducts(query) {
         const {
@@ -60,6 +60,34 @@ class ProductService {
 
         return product;
     }
+
+    static async getRelatedProducts(productId, limit = 5) {
+        const product = await Product.findById(productId);
+        if (!product) throw new Error("Product not found");
+
+        return Product.find({
+            _id: { $ne: productId },
+            category: product.category,
+            isActive: true,
+        })
+            .sort({ createdAt: -1 })
+            .limit(limit);
+    }
+
+    static async getProductStats(productId) {
+        const product = await Product.findById(productId);
+        if (!product || !product.isActive) {
+            throw new Error("Product not found");
+        }
+
+        const [orders, reviews] = await Promise.all([
+            Order.countDocuments({ "items.productId": productId, status: "completed" }),
+            Review.countDocuments({ productId }),
+        ]);
+
+        return { totalBuyers: orders, totalComments: reviews};
+    }
+
 
 }
 
