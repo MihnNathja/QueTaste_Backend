@@ -9,8 +9,10 @@ const productRoutes = require("./src/routes/productRoutes");
 const postRoutes = require("./src/routes/postRoute");
 const cartRoutes = require("./src/routes/cartRoutes");
 const orderRoutes = require("./src/routes/orderRoutes");
+const couponRoutes = require("./src/routes/couponRoutes");
 dotenv.config();
 connectDB();
+require("./src/jobs/couponJob");
 
 const app = express();
 
@@ -25,6 +27,7 @@ app.use("/api/product", productRoutes);
 app.use("/api/post", postRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/order", orderRoutes);
+app.use("/api/coupon", couponRoutes);
 
 // Listen
 const PORT = process.env.PORT || 8088;
