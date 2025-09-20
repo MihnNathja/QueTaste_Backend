@@ -18,7 +18,7 @@ class AuthService {
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) throw new Error("Invalid credentials");
 
-        const tokens = generateToken(user._id);
+        const tokens = generateToken(user);
 
         await Token.create({ userId: user._id, refreshToken: tokens.refreshToken });
 

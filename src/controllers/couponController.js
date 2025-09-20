@@ -4,7 +4,11 @@ const CouponService = require("../services/couponService");
 // GET /coupons
 exports.getAllCoupons = async (req, res) => {
     try {
-        const coupons = await CouponService.getAllCoupons(req.query);
+        const coupons = await CouponService.getAllCoupons(
+            req.query,
+            req.user?.role || "customer",   // role từ token
+            req.user?.id || null            // id từ token
+        );
         return sendResponse(res, 200, true, "Coupons fetched", coupons);
     } catch (err) {
         return sendResponse(res, 500, false, err.message);

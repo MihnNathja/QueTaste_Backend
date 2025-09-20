@@ -1,5 +1,10 @@
 const mongoose = require("mongoose");
 
+const COUPON_VISIBILITY = [
+  "public",   // ai có code cũng nhập được
+  "private",  // chỉ cấp phát thông qua UserCoupon (đổi điểm, khuyến mãi cá nhân)
+];
+
 const COUPON_TYPES = [
     "percentage",   // giảm theo %
     "fixed",        // giảm số tiền cố định
@@ -39,6 +44,9 @@ const couponSchema = new mongoose.Schema({
 
     // Trạng thái & điều khiển
     status: { type: String, enum: COUPON_STATUS, default: "active" },
+
+    //Phân biệt coupon public/private
+    visibility: { type: String, enum: COUPON_VISIBILITY, default: "public" },
 
     // Audit log cơ bản
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },

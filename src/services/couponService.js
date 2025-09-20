@@ -1,8 +1,9 @@
 const Coupon = require("../models/Coupon");
+const UserCoupon = require("../models/UserCoupon");
 
 class CouponService {
     // List + filter + pagination
-    static async getAllCoupons(query) {
+    static async getAllCoupons(query, userRole = "customer", userId = null) {
         const {
             page = 1,
             limit,
@@ -13,21 +14,76 @@ class CouponService {
         } = query;
 
         const filter = {};
-        if (status) filter.status = status;
-        if (search) {
-            filter.$or = [
-                { name: { $regex: search, $options: "i" } },
-                { code: { $regex: search, $options: "i" } },
-            ];
+        const andConditions = [];
+
+        // Lọc theo status
+        if (status) {
+            filter.status = status;
         }
 
+        // Lọc theo search (name/code)
+        if (search) {
+            andConditions.push({
+                $or: [
+                    { name: { $regex: search, $options: "i" } },
+                    { code: { $regex: search, $options: "i" } },
+                ],
+            });
+        }
+
+        // Nếu là user (khách) thì chỉ thấy public hoặc private được cấp qua UserCoupon
+        if (userRole === "customer" && userId) {
+            const userCoupons = await UserCoupon.find({
+                userId,
+                status: "active",
+            }).select("couponId");
+
+            const userCouponIds = userCoupons.map((uc) => uc.couponId);
+
+            andConditions.push({
+                $or: [
+                    { visibility: "public" },
+                    { _id: { $in: userCouponIds } },
+                ],
+            });
+
+            // Coupon còn trong khoảng thời gian hiệu lực
+            const now = new Date();
+            andConditions.push(
+                {
+                    $or: [
+                        { startDate: null },
+                        { startDate: { $lte: now } },
+                    ],
+                },
+                {
+                    $or: [
+                        { endDate: null },
+                        { endDate: { $gte: now } },
+                    ],
+                }
+            );
+        }
+
+        // Nếu có nhiều điều kiện thì combine bằng $and
+        if (andConditions.length > 0) {
+            filter.$and = andConditions;
+        }
+
+        // Sort
         const dir = order === "asc" ? 1 : -1;
         const sort = { [sortBy]: dir };
 
+        // Query
         let q = Coupon.find(filter).sort(sort);
-        if (limit) q = q.skip((page - 1) * limit).limit(parseInt(limit));
+        if (limit) {
+            q = q.skip((page - 1) * limit).limit(parseInt(limit));
+        }
 
-        const [coupons, total] = await Promise.all([q, Coupon.countDocuments(filter),]);
+        const [coupons, total] = await Promise.all([
+            q,
+            Coupon.countDocuments(filter),
+        ]);
 
         return {
             coupons,
