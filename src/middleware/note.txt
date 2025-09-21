@@ -1,5 +1,0 @@
-Chứa các middleware custom cho Express.
-
-Middleware là các hàm chạy trước khi vào controller.
-
-Dùng cho: xác thực JWT, xử lý lỗi, logging, validate request.

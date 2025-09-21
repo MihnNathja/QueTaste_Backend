@@ -1,5 +1,0 @@
-Chứa định nghĩa endpoint API (ví dụ /api/users, /api/posts).
-
-Mỗi route thường tương ứng với một model hoặc chức năng.
-
-Route chỉ trỏ đến controller, không chứa logic
