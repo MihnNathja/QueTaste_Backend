@@ -9,6 +9,11 @@ const productRoutes = require("./src/routes/productRoutes");
 const postRoutes = require("./src/routes/postRoute");
 const cartRoutes = require("./src/routes/cartRoutes");
 const orderRoutes = require("./src/routes/orderRoutes");
+
+const favoriteRoutes = require("./src/routes/favoriteRoutes");
+const userViewRoutes = require("./src/routes/userViewRoutes");
+const reviewRoutes = require("./src/routes/reviewRoutes");
+
 const couponRoutes = require("./src/routes/couponRoutes");
 dotenv.config();
 connectDB();
@@ -27,6 +32,9 @@ app.use("/api/product", productRoutes);
 app.use("/api/post", postRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/order", orderRoutes);
+app.use("/api/favorites", favoriteRoutes);
+app.use("/api/userviews", userViewRoutes);
+app.use("/api/review", reviewRoutes);
 app.use("/api/coupon", couponRoutes);
 
 // Listen

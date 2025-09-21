@@ -1,6 +1,7 @@
 const express = require("express");
 const orderController = require("../controllers/orderController");
 const authMiddleware = require('../middleware/authMiddleware')
+const adminMiddleware = require("../middleware/adminMiddleware")
 
 const router = express.Router();
 
@@ -10,5 +11,8 @@ router.post("/cancel/:orderId", authMiddleware, orderController.cancelOrder);
 router.post("/request-cancel/:orderId", authMiddleware, orderController.requestCancelOrder);
 router.post("/momo/notify", orderController.momoNotify);
 router.post("/update-status", orderController.updateStatus);
+
+//router.get("/get-all", authMiddleware, adminMiddleware, orderController.getAllOrders)
+router.get("/get-all", orderController.getAllOrders)
 
 module.exports = router;
