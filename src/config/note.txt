@@ -1,2 +1,0 @@
-Chứa các file cấu hình ứng dụng.
-Ví dụ: kết nối MongoDB, config JWT secret, config cloud storage

@@ -1,3 +1,0 @@
-Chứa logic điều khiển: nhận request, gọi service hoặc model, trả response.
-
-Controller đóng vai trò điều phối, không nên ôm business logic nặng.

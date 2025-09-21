@@ -1,5 +1,0 @@
-Chứa business logic (nghiệp vụ).
-
-Tách riêng để controller ngắn gọn.
-
-Dễ dàng viết unit test cho service mà không phụ thuộc vào HTTP request.

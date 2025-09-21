@@ -1,27 +1,24 @@
+// routes/couponRoutes.js
 const express = require("express");
 const couponController = require("../controllers/couponController");
+const auth = require("../../src/middleware/authMiddleware");
 
 const router = express.Router();
 
-// Lấy danh sách coupon
-router.get("/", couponController.getAllCoupons);
+// 🔹 User-specific
+router.get("/my", auth, couponController.getMyCoupons);       // coupon user đã redeem
+router.get("/user", auth, couponController.getUserCoupons);   // coupon user có thể dùng
+router.post("/:id/redeem", auth, couponController.redeemCoupon);
 
-// Xem chi tiết
+// 🔹 Admin-specific
+router.get("/admin", auth, couponController.getAdminCoupons);
+
+// 🔹 Common
 router.get("/:id", couponController.getCouponById);
-
-// Tạo mới
 router.post("/", couponController.createCoupon);
-
-// Cập nhật
 router.patch("/:id", couponController.updateCoupon);
-
-// Tạm dừng
 router.patch("/:id/pause", couponController.pauseCoupon);
-
-// Lưu trữ
 router.patch("/:id/archive", couponController.archiveCoupon);
-
-// Kích hoạt lại
 router.patch("/:id/activate", couponController.activateCoupon);
 
 module.exports = router;
