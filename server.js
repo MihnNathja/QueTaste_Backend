@@ -11,6 +11,7 @@ const cartRoutes = require("./src/routes/cartRoutes");
 const orderRoutes = require("./src/routes/orderRoutes");
 const favoriteRoutes = require("./src/routes/favoriteRoutes");
 const userViewRoutes = require("./src/routes/userViewRoutes");
+const reviewRoutes = require("./src/routes/reviewRoutes");
 dotenv.config();
 connectDB();
 
@@ -29,6 +30,7 @@ app.use("/api/cart", cartRoutes);
 app.use("/api/order", orderRoutes);
 app.use("/api/favorites", favoriteRoutes);
 app.use("/api/userviews", userViewRoutes);
+app.use("/api/review", reviewRoutes);
 
 // Listen
 const PORT = process.env.PORT || 8088;

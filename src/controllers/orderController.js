@@ -25,7 +25,7 @@ exports.getMyOrders = async (req, res) => {
       page: parseInt(page) || 1,
       limit: parseInt(limit) || 10,
     });
-    //console.log(orders);
+    console.log(orders);
     return sendResponse(res, 201, true, "Get Order successfully", orders);
   } catch (err) {
     console.error("Error in getMyOrders controller:", err.message);
