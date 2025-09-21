@@ -3,6 +3,7 @@ const Order = require("../models/Order");
 const Product = require("../models/Product");
 const axios = require("axios");
 const crypto = require("crypto");
+const dayjs = require("dayjs");
 
 class OrderService {
     // Checkout chung (COD hoặc MoMo)
@@ -306,6 +307,86 @@ class OrderService {
             await Order.deleteOne({ _id: orderId });
             return null;
         }
+    }
+
+    static async getAllOrders({ status, search, page = 1, limit = 10 } = {}) {
+        try {
+
+            const query = {};
+
+            if (status && status !== "all") {
+                query.status = status;   
+            }
+
+            if (search) {
+            const productIds = await Product.find(
+                { name: { $regex: search, $options: "i" } },
+                { _id: 1 }
+            ).lean();
+
+            const ids = productIds.map(p => p._id);
+
+            query.$or = [
+                { "items.product": { $in: ids } },
+                { "shippingAddress.fullName": { $regex: search, $options: "i" } },
+            ];
+            }
+
+
+            const orders = await Order.find(query)
+            .sort({ createdAt: -1 })
+            .skip((page - 1) * limit)
+            .limit(limit)
+            .populate({
+                path: "items.product",
+                model: "Product",
+                select: "name price salePrice category images averageRating totalReviews",
+            })
+            .populate({
+                path: "user",          
+                model: "User",
+                select: "email personalInfo.fullName personalInfo.phone personalInfo.address"
+            });
+
+            // 🔹 Chuẩn hóa dữ liệu
+            const formatted = orders.map((o) => ({
+                id: o._id.toString(),
+                code: `DH${o._id.toString().slice(-6)}`, // mã đơn
+                user: o.user,
+                shippingAddress: o.shippingAddress,
+                createdAt: dayjs(o.createdAt).format("YYYY-MM-DD HH:mm:ss"), // chuẩn hóa thời gian
+                updatedAt: dayjs(o.updatedAt).format("YYYY-MM-DD HH:mm:ss"),
+                status: o.status,
+                paymentMethod: o.paymentMethod,
+                paymentStatus: o.paymentStatus,
+                totalAmount: o.totalAmount,
+                shippingFee: o.shippingFee,
+                discount: o.discount,
+                finalAmount: o.finalAmount,
+                items: o.items,
+            }));
+
+            return {
+                data: formatted,
+                pagination: {
+                    page,
+                    limit,
+                    total: await Order.countDocuments(query),
+                },
+            };
+        } catch (err) {
+            console.error("Error in getMyOrders:", err.message);
+            throw new Error("Không thể lấy danh sách đơn hàng");
+        }
+    }
+    static async updateOrderStatus(orderId, status) {
+        const order = await Order.findById(orderId);
+        if (!order) throw new Error("Order not found");
+
+
+        order.status = status
+        await order.save();
+        return order;
     }
 }
 

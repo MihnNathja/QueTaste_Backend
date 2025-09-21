@@ -1,7 +1,6 @@
 const Order = require("../models/Order");
+const Product = require("../models/Product");
 const Review = require("../models/Review");
-
-
 
 class ReviewService {
     static async createReview(userId, { productId, orderId, rating, comment}) {
@@ -17,7 +16,7 @@ class ReviewService {
             
         const existing = await Review.findOne({ user: userId, product: productId, order: orderId});
         if (existing) {
-            throw new Error(("You have already reviewed this product."))
+            throw new Error(("Bạn đã đánh giá sản phẩm này rồi."))
         }
 
         const review = await Review.create({
@@ -43,11 +42,54 @@ class ReviewService {
         return review;
     }
 
-    static async getReviewsByProduct(productId){
-        return await Review.find({ product: productId })
-            .populate("User", "name email")
-            .sort({ createdAt: -1});
+    static async getReviewsByProduct({ productId, rating, orderBy = "newest", page = 1, limit = 10 } = {}) {
+       console.log("Rating: ", rating);
+       console.log("ProductId: ", productId);
+        try {
+            const query = {};
+
+            // lọc theo productId
+            if (productId) {
+            query.product = productId;
+            }
+
+            // lọc theo rating (nếu có)
+            if (rating) {
+            query.rating = rating;
+            }
+
+            // sắp xếp theo thời gian
+            const sortOrder = orderBy === "newest" ? -1 : 1;
+
+            // đếm tổng số review (để phân trang)
+            const total = await Review.countDocuments(query);
+
+            // lấy review
+            const reviews = await Review.find(query)
+            .sort({ createdAt: sortOrder })
+            .skip((page - 1) * limit)
+            .limit(limit)
+            .populate({
+                path: "user",
+                model: "User",
+                select: "email personalInfo.fullName avatar"
+            });
+
+            return {
+                items: reviews,
+                pagination: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit)
+                }
+            };
+        } catch (err) {
+            console.error("Error in getReviewsByProduct:", err.message);
+            throw new Error("Không thể lấy danh sách đánh giá");
+        }
     }
+
 }
 
 module.exports = ReviewService;
