@@ -7,6 +7,7 @@ exports.checkout = async (req, res) => {
         const order = await OrderService.checkout(req.user.id, req.body);
         return sendResponse(res, 201, true, "Order created successfully", order);
     } catch (err) {
+        console.error("Error in checkout controller:", err.message);
         return sendResponse(res, 400, false, err.message);
     }
 };

@@ -1,105 +1,85 @@
 const Cart = require("../models/Cart");
 const Order = require("../models/Order");
 const Product = require("../models/Product");
+const Coupon = require("../models/Coupon");
 const axios = require("axios");
 const crypto = require("crypto");
 const dayjs = require("dayjs");
 
 class OrderService {
     // Checkout chung (COD hoặc MoMo)
-    static async checkout(userId, { paymentMethod, shippingAddress, notes }) {
-        // 1. Lấy giỏ hàng
-        const cart = await Cart.findOne({ user: userId }).populate("items.product");
-        if (!cart || cart.items.length === 0) {
-        throw new Error("Cart is empty");
-        }
+    static async checkout(userId, { paymentMethod, shippingAddress, notes, coupon }) {
+    const cart = await Cart.findOne({ user: userId }).populate("items.product");
+    if (!cart || cart.items.length === 0) throw new Error("Cart is empty");
 
-        // 2. Tính toán đơn hàng
-        let totalAmount = 0;
-        const orderItems = [];
-
-        for (const item of cart.items) {
+    // tính subtotal
+    let subtotal = 0;
+    const orderItems = [];
+    for (const item of cart.items) {
         const product = item.product;
+        if (!product.isActive) throw new Error(`Product ${product.name} not available`);
+        if (product.stock < item.quantity) throw new Error(`Not enough stock for ${product.name}`);
 
-        if (!product.isActive) {
-            throw new Error(`Product ${product.name} is not available`);
-        }
+        const price = product.salePrice > 0 ? product.salePrice : product.price;
+        subtotal += price * item.quantity;
 
-        if (product.stock < item.quantity) {
-            throw new Error(`Not enough stock for product ${product.name}`);
-        }
-
-        const price =
-            product.salePrice && product.salePrice > 0
-            ? product.salePrice
-            : product.price;
-
-        totalAmount += price * item.quantity;
-
-        orderItems.push({
-            product: product._id,
-            quantity: item.quantity,
-            price,
-        });
+        orderItems.push({ product: product._id, quantity: item.quantity, price });
 
         product.stock -= item.quantity;
         product.totalSold += item.quantity;
         await product.save();
+    }
+
+    const shippingFee = 36000;
+    let discount = 0;
+    let couponDoc = null;
+
+    if (coupon) {
+        couponDoc = await Coupon.findById(coupon);
+        if (!couponDoc) throw new Error("Coupon not found");
+        if (couponDoc.minOrderValue && subtotal < couponDoc.minOrderValue) {
+        throw new Error("Đơn hàng chưa đạt giá trị tối thiểu cho coupon này");
         }
 
-        const shippingFee = 36000;
-        const discount = 0;
-        const finalAmount = totalAmount - discount + shippingFee;
+        if (couponDoc.type === "percentage") {
+        discount = Math.min((subtotal * couponDoc.value) / 100, couponDoc.maxDiscount || Infinity);
+        } else if (couponDoc.type === "fixed") {
+        discount = Math.min(couponDoc.value, subtotal);
+        } else if (couponDoc.type === "free_shipping") {
+        discount = Math.min(shippingFee, couponDoc.maxDiscount || shippingFee);
+        }
+    }
 
-        // 3. Nếu COD → lưu order trực tiếp
-        if (paymentMethod === "COD") {
-        const order = new Order({
-            user: userId,
-            items: orderItems,
-            totalAmount,
-            discount,
-            shippingFee,
-            finalAmount,
-            paymentMethod,
-            paymentStatus: "pending",
+    const finalAmount = subtotal - discount + shippingFee;
+
+    // tạo order
+    const order = new Order({
+        user: userId,
+        items: orderItems,
+        totalAmount: subtotal,
+        discount,
+        shippingFee,
+        finalAmount,
+        coupon: couponDoc?._id || null,
+        paymentMethod,
+        paymentStatus: "pending",
         shippingAddress,
         notes,
-        status: "new",
-        });
+        status: paymentMethod === "COD" ? "new" : "pending",
+    });
 
-        await order.save();
+    await order.save();
 
-        // COD thì clear cart ngay
+    // clear cart nếu COD
+    if (paymentMethod === "COD") {
         cart.items = [];
         await cart.save();
-
         return order;
-        }
+    }
 
-        // 4. Nếu MoMo → tạo order pending + gọi API sandbox
-        if (paymentMethod === "momo") {
-        const order = new Order({
-            user: userId,
-            items: orderItems,
-            totalAmount,
-            discount,
-            shippingFee,
-            finalAmount,
-            paymentMethod,
-            paymentStatus: "pending", // chờ MoMo confirm
-            shippingAddress,
-            notes,
-            status: "pending",        // chưa hoàn tất
-        });
-
-        await order.save();
-
-        // dùng _id của MongoDB làm orderId
+    // nếu momo thì tạo request thanh toán
+    if (paymentMethod === "momo") {
         const orderId = order._id.toString();
-
-        // 🚨 KHÔNG clear cart ở đây nữa
-
-        // gọi API MoMo
         const partnerCode = "MOMO";
         const accessKey = "F8BBA842ECF85";
         const secretKey = "K951B6PE1waDMi640xX08PD3vg6EkVlz";
@@ -111,45 +91,42 @@ class OrderService {
         const extraData = "";
 
         const rawSignature =
-            `accessKey=${accessKey}&amount=${finalAmount}&extraData=${extraData}&ipnUrl=${ipnUrl}` +
-            `&orderId=${orderId}&orderInfo=${orderInfo}&partnerCode=${partnerCode}` +
-            `&redirectUrl=${redirectUrl}&requestId=${requestId}&requestType=${requestType}`;
+        `accessKey=${accessKey}&amount=${finalAmount}&extraData=${extraData}&ipnUrl=${ipnUrl}` +
+        `&orderId=${orderId}&orderInfo=${orderInfo}&partnerCode=${partnerCode}` +
+        `&redirectUrl=${redirectUrl}&requestId=${requestId}&requestType=${requestType}`;
 
         const signature = crypto
-            .createHmac("sha256", secretKey)
-            .update(rawSignature)
-            .digest("hex");
+        .createHmac("sha256", secretKey)
+        .update(rawSignature)
+        .digest("hex");
 
         const requestBody = {
-            partnerCode,
-            partnerName: "Test",
-            storeId: "MomoTestStore",
-            requestId,
-            amount: finalAmount,
-            orderId,
-            orderInfo,
-            redirectUrl,
-            ipnUrl,
-            lang: "vi",
-            requestType,
-            autoCapture: true,
-            extraData,
-            signature,
+        partnerCode,
+        partnerName: "Test",
+        storeId: "MomoTestStore",
+        requestId,
+        amount: finalAmount,
+        orderId,
+        orderInfo,
+        redirectUrl,
+        ipnUrl,
+        lang: "vi",
+        requestType,
+        autoCapture: true,
+        extraData,
+        signature,
         };
 
         const response = await axios.post(
-            "https://test-payment.momo.vn/v2/gateway/api/create",
-            requestBody,
-            { headers: { "Content-Type": "application/json" } }
+        "https://test-payment.momo.vn/v2/gateway/api/create",
+        requestBody,
+        { headers: { "Content-Type": "application/json" } }
         );
 
-        return {
-            order,
-            payUrl: response.data.payUrl,
-        };
-        }
+        return { order, payUrl: response.data.payUrl };
+    }
 
-        throw new Error("Unsupported payment method");
+    throw new Error("Unsupported payment method");
     }
 
     static async getMyOrders(userId, { status, search, page = 1, limit = 10 } = {}) {
@@ -269,7 +246,7 @@ class OrderService {
 
         if (Number(resultCode) === 0) {
             order.paymentStatus = "paid";
-            order.status = "completed";
+            order.status = "new";
 
             // ✅ clear cart khi thanh toán thành công
             const cart = await Cart.findOne({ user: order.user });
@@ -289,11 +266,13 @@ class OrderService {
     // Cập nhật trạng thái (frontend redirect gọi)
     static async updateStatus(orderId, resultCode) {
         const order = await Order.findById(orderId);
-        if (!order) throw new Error("Order not found");
+        if (!order) {
+            throw new Error("Order not found");
+        }
 
         if (Number(resultCode) === 0) {
             order.paymentStatus = "paid";
-            order.status = "completed";
+            order.status = "new";
 
             // ✅ clear cart khi thanh toán thành công
             const cart = await Cart.findOne({ user: order.user });
