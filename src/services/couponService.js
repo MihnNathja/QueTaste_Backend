@@ -33,29 +33,60 @@ class CouponService {
         };
     }
 
-    // User: lấy coupon public + private được cấp
-    static async getUserCoupons(query) {
+    // User: lấy coupon public + private hợp lệ cho user
+    static async getUserCoupons(query, userId) {
         const { page = 1, limit } = query;
         const now = new Date();
 
-        const filter = {
+        // 1. Lấy tất cả coupon active trong thời gian hợp lệ
+        let coupons = await Coupon.find({
             status: "active",
             $and: [
             { $or: [{ startDate: null }, { startDate: { $lte: now } }] },
             { $or: [{ endDate: null }, { endDate: { $gte: now } }] },
             ],
-        };
+        }).sort({ createdAt: -1 });
 
-        let q = Coupon.find(filter).sort({ createdAt: -1 });
-        if (limit) q = q.skip((page - 1) * limit).limit(parseInt(limit));
+        // 2. Lấy log UserCoupon của user
+        const userCoupons = await UserCoupon.find({ userId });
+        const usageCountByCoupon = {};
+        userCoupons.forEach((uc) => {
+            const id = uc.couponId.toString();
+            usageCountByCoupon[id] = (usageCountByCoupon[id] || 0) + 1;
+        });
 
-        const [coupons, total] = await Promise.all([
-            q,
-            Coupon.countDocuments(filter),
-        ]);
+        // 3. Lọc coupon theo logic
+        coupons = coupons.filter((coupon) => {
+            const id = coupon._id.toString();
+
+            // Public
+            if (coupon.visibility === "public") {
+            if (coupon.usageLimit && coupon.usedCount >= coupon.usageLimit) return false;
+            if (coupon.usagePerCustomer != null) {
+                if ((usageCountByCoupon[id] || 0) >= coupon.usagePerCustomer) return false;
+            }
+            return true;
+            }
+
+            // Private
+            if (coupon.visibility === "private") {
+            if (coupon.redeemStock && coupon.redeemedCount >= coupon.redeemStock) return false;
+            if (coupon.usagePerCustomer != null) {
+                if ((usageCountByCoupon[id] || 0) >= coupon.usagePerCustomer) return false;
+            }
+            return true;
+            }
+
+            return false;
+        });
+
+        // 4. Phân trang
+        const total = coupons.length;
+        const start = (page - 1) * limit;
+        const paginated = coupons.slice(start, start + limit);
 
         return {
-            coupons,
+            coupons: paginated,
             total,
             currentPage: parseInt(page),
             totalPage: limit ? Math.ceil(total / limit) : 1,

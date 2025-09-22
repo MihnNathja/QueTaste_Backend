@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 
 const ORDER_STATUS = [
   "new",                // Đơn hàng mới
+  "pending",            // Chờ xác nhận
   "confirmed",          // Đã xác nhận
   "processing",         // Shop chuẩn bị hàng
   "shipping",           // Đang vận chuyển
@@ -22,10 +23,10 @@ const orderSchema = new mongoose.Schema({
         },
     ],
     //status: { type: String, enum: ["pending", "completed", "canceled"], default: "pending" },
-    status: { 
-        type: String, 
-        enum: ORDER_STATUS, 
-        default: "new" 
+    status: {
+        type: String,
+        enum: ORDER_STATUS,
+        default: "new"
     },
     cancelRequest: {
         reason: String,
@@ -50,6 +51,9 @@ const orderSchema = new mongoose.Schema({
     totalAmount: { type: Number, required: true },   // tổng tiền trước giảm
     discount: { type: Number, default: 0 },          // tổng giảm
     finalAmount: { type: Number, required: true },   // tiền khách phải trả = totalAmount - discount + shippingFee
+
+    // Coupon được áp dụng
+    coupon: { type: mongoose.Schema.Types.ObjectId, ref: "Coupon" },
 
     // Ghi chú
     notes: { type: String, trim: true },
