@@ -2,6 +2,7 @@ const Cart = require("../models/Cart");
 const Order = require("../models/Order");
 const Product = require("../models/Product");
 const Coupon = require("../models/Coupon");
+const UserCoupon = require("../models/UserCoupon");
 const axios = require("axios");
 const crypto = require("crypto");
 const dayjs = require("dayjs");
@@ -48,6 +49,24 @@ class OrderService {
         } else if (couponDoc.type === "free_shipping") {
         discount = Math.min(shippingFee, couponDoc.maxDiscount || shippingFee);
         }
+    }
+
+    if (couponDoc) {
+        // đánh dấu coupon đã được dùng
+        await UserCoupon.create({
+            userId,
+            couponId: couponDoc._id,
+            status: "used",
+            usedAt: new Date(),
+            startDate: couponDoc.startDate || new Date(),
+            endDate: couponDoc.endDate || null,
+        });
+
+        // đồng thời tăng đếm tổng số lượt dùng của coupon (nếu có dùng limit)
+        await Coupon.updateOne(
+            { _id: couponDoc._id },
+            { $inc: { usedCount: 1 } }
+        );
     }
 
     const finalAmount = subtotal - discount + shippingFee;
