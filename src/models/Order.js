@@ -20,6 +20,7 @@ const orderSchema = new mongoose.Schema({
         product: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
         quantity: { type: Number, default: 1 },
         price: { type: Number, required: true }, // giá bán tại thời điểm đặt
+        isReviewed: {type: Boolean, default: false}
         },
     ],
     //status: { type: String, enum: ["pending", "completed", "canceled"], default: "pending" },

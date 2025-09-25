@@ -1,11 +1,16 @@
+const { earnPoints } = require("../services/pointTransactionService");
 const ReviewService = require("../services/reviewService");
 const sendResponse = require("../utils/response");
+
+const POINT_REVIEW = 50;
 
 // POST /review
 exports.createReview = async (req, res) => {
     try {
         //console.log("req.body: ", req.body);
-        const review = await ReviewService.createReview(req.user.id, req.body);
+        const userId = req.user.id;
+        const review = await ReviewService.createReview(userId, req.body);
+        await earnPoints(userId, POINT_REVIEW, "Điểm thưởng đánh giá sản phẩm", 90);
         return sendResponse(res, 201, true, "Review created", review);
     } catch (err){
         return sendResponse(res, 400, false, err.message);
