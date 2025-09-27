@@ -11,12 +11,15 @@ class ReviewService {
             status: "completed"
         });
         if (!order) {
-            throw new Error("You have not purchased this product yet, or your order has not been completed.");
+            throw new Error("Bạn chưa mua sản phẩm này hoặc đơn hàng của bạn chưa được hoàn tất");
         } 
             
-        const existing = await Review.findOne({ user: userId, product: productId, order: orderId});
-        if (existing) {
-            throw new Error(("Bạn đã đánh giá sản phẩm này rồi."))
+        const orderItem = order.items.find(item => item.product.toString() === productId);
+        if (!orderItem) {
+            throw new Error("Sản phẩm không được tìm thấy trong đơn hàng.");
+        }
+        if (orderItem.isReviewed) {
+            throw new Error("Bạn đã đánh giá sản phẩm này rồi.");
         }
 
         const review = await Review.create({
@@ -38,6 +41,8 @@ class ReviewService {
                 totalReviews: stats[0].count
             });
         }
+        orderItem.isReviewed = true;
+        await order.save();
 
         return review;
     }

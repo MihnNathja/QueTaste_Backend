@@ -6,6 +6,6 @@ const router = express.Router();
 
 router.post("/", authMiddleware, reviewController.createReview);
 
-router.get("/", authMiddleware, reviewController.getReviewsByProduct);
+router.get("/", reviewController.getReviewsByProduct);
 
 module.exports = router;

@@ -45,6 +45,7 @@ const userSchema = new mongoose.Schema(
       default: "active",
     },
     personalInfo: personalInfoSchema, // nhúng schema cá nhân
+    pointsBalance: { type: Number, default: 0 }
   },
   { timestamps: true } // tự động tạo createdAt, updatedAt
 );
