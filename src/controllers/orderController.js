@@ -1,10 +1,27 @@
 const OrderService = require("../services/orderService");
 const sendResponse = require("../utils/response");
+const { notifyUser, notifyAdmins } = require("../services/notificationService");
 
 // POST /api/order/checkout
 exports.checkout = async (req, res) => {
     try {
         const order = await OrderService.checkout(req.user.id, req.body);
+
+        await notifyUser(req.user.id, {
+          type: "order",
+          message: `Đơn hàng #${order._id} của bạn đã được tạo thành công`,
+          link: `/orders/${order._id}`,
+          sendEmail: true, // gửi email
+          priority: "high"
+        });
+
+        await notifyAdmins({
+          type: "order",
+          message: `Có đơn hàng mới #${order._id} từ ${req.user.id}`,
+          link: `/admin/orders/${order._id}`,
+          priority: "high",
+        });
+
         return sendResponse(res, 201, true, "Order created successfully", order);
     } catch (err) {
         console.error("Error in checkout controller:", err.message);
@@ -18,7 +35,6 @@ exports.getMyOrders = async (req, res) => {
     const { status, search, page, limit } = req.query;
     const params = req.query;
     //console.log(params);
-    
 
     const orders = await OrderService.getMyOrders(userId, {
       status: status || "all",
@@ -37,10 +53,23 @@ exports.getMyOrders = async (req, res) => {
 exports.cancelOrder = async (req, res) => {
   try {
     const userId = req.user.id;
-    //console.log(userId);
     const {orderId} = req.params;
-    //console.log(orderId);
     const order = await OrderService.cancelOrder(userId, orderId);
+
+    await notifyUser(req.user.id, {
+      type: "order",
+      message: `Đơn hàng #${order._id} đã được hủy`,
+      link: `/orders/${order._id}`,
+      priority: "high"
+    });
+
+    await notifyAdmins({
+      type: "order",
+      message: `Khách ${req.user.id} vừa hủy đơn hàng #${order._id}`,
+      link: `/admin/orders/${order._id}`,
+      priority: "high"
+    });
+
     return sendResponse(res, 200, true, "Order cancelled successfully", order);
   } catch (err) {
     console.error("Error in cancelOrder controller:", err.message);
