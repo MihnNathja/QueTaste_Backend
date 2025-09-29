@@ -18,7 +18,7 @@ const userViewRoutes = require("./src/routes/userViewRoutes");
 const reviewRoutes = require("./src/routes/reviewRoutes");
 const couponRoutes = require("./src/routes/couponRoutes");
 const notificationRoutes = require("./src/routes/notificationRoutes");
-
+const chatRoutes = require("./src/routes/chatRoutes");
 dotenv.config();
 connectDB();
 require("./src/jobs/couponJob");
@@ -42,7 +42,7 @@ app.use("/api/review", reviewRoutes);
 app.use("/api/coupon", couponRoutes);
 app.use("/api/coupon", couponRoutes);
 app.use("/api/notifications", notificationRoutes);
-
+app.use("/api/chat", chatRoutes);
 // ====== Socket.IO ======
 const server = http.createServer(app);
 const io = initSocket(server);
