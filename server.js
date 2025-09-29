@@ -5,6 +5,7 @@ const http = require("http");
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const connectDB = require("./src/config/db");
+const { initSocket, getIO } = require("./src/config/socket");
 
 const authRoutes = require("./src/routes/authRoutes");
 const userRoutes = require("./src/routes/userRoutes");
@@ -44,9 +45,7 @@ app.use("/api/notifications", notificationRoutes);
 
 // ====== Socket.IO ======
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: "*" },
-});
+const io = initSocket(server);
 
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
