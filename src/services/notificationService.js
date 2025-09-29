@@ -3,7 +3,7 @@ const Notification = require("../models/Notification");
 const { io } = require("../../server");
 const sendMail = require("../utils/sendMail");
 const User = require("../models/User");
-
+const { getIO } = require("../config/socket");
 /**
  * Gửi thông báo cho 1 user
  */
@@ -11,7 +11,11 @@ const notifyUser = async (userId, { type, message, link, priority = "normal", se
   const notification = await Notification.create({ userId, type, message, link, priority });
 
   // emit realtime
-  io.to(userId.toString()).emit("notification", notification);
+  try {
+    getIO().to(userId.toString()).emit("notification", notification);
+  } catch (e) {
+    console.error("Emit error:", e.message);
+  }
 
   // gửi email (không chặn)
   if (sendEmail) {
@@ -33,15 +37,24 @@ const notifyUser = async (userId, { type, message, link, priority = "normal", se
  */
 const notifyAdmins = async ({ type, message, link, priority = "high" }) => {
   const admins = await User.find({ role: "admin" }, "_id");
+  const io = getIO();
   const notifications = [];
 
   for (const admin of admins) {
     const n = await Notification.create({ userId: admin._id, type, message, link, priority });
-    io.to(admin._id.toString()).emit("notification", n);
+    try {
+      io.to(admin._id.toString()).emit("notification", n);
+    } catch (e) {
+      console.error("Emit admin error:", e.message);
+    }
     notifications.push(n);
   }
 
-  io.to("admins").emit("notification", notifications);
+  try {
+    io.to("admins").emit("notification", { bulk: true, items: notifications });
+  } catch (e) {
+    console.error("Emit room admins error:", e.message);
+  }
   return notifications;
 };
 
@@ -50,11 +63,16 @@ const notifyAdmins = async ({ type, message, link, priority = "high" }) => {
  */
 const notifyAllUsers = async ({ type, message, link, priority = "normal" }) => {
   const users = await User.find({}, "_id");
+  const io = getIO();
   const notifications = [];
 
   for (const user of users) {
     const n = await Notification.create({ userId: user._id, type, message, link, priority });
-    io.to(user._id.toString()).emit("notification", n);
+    try {
+      io.to(user._id.toString()).emit("notification", n);
+    } catch (e) {
+      console.error("Emit all users error:", e.message);
+    }
     notifications.push(n);
   }
 
