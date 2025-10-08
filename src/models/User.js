@@ -5,9 +5,19 @@ const personalInfoSchema = new mongoose.Schema(
   {
     fullName: { type: String, trim: true },
     phone: { type: String, trim: true },
-    address: { type: String, trim: true },
+    shippingAddress: {
+      street: String, // địa chỉ đường
+      province: String, // tỉnh
+      district: String, // quận
+      ward: String, // phường
+      postalCode: String,
+    },
     dateOfBirth: { type: Date },
-    gender: { type: String, enum: ["male", "female", "other"], default: "other" },
+    gender: {
+      type: String,
+      enum: ["male", "female", "other"],
+      default: "other",
+    },
   },
   { _id: false } // nhúng vào userSchema, không tạo _id riêng
 );
@@ -45,7 +55,7 @@ const userSchema = new mongoose.Schema(
       default: "active",
     },
     personalInfo: personalInfoSchema, // nhúng schema cá nhân
-    pointsBalance: { type: Number, default: 0 }
+    pointsBalance: { type: Number, default: 0 },
   },
   { timestamps: true } // tự động tạo createdAt, updatedAt
 );

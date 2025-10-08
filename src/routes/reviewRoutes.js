@@ -8,4 +8,6 @@ router.post("/", authMiddleware, reviewController.createReview);
 
 router.get("/", reviewController.getReviewsByProduct);
 
+router.get("/admin", reviewController.getAllReviews);
+
 module.exports = router;
