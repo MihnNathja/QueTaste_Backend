@@ -16,16 +16,21 @@ class ProductService {
       order = "desc",
     } = query;
 
-    const filter = { isActive: true };
-    if (search) filter.name = { $regex: search, $options: "i" };
-    if (category) filter.category = category;
-    if (region) filter.region = region;
-    if (rating) filter.averageRating = { $gte: Number(rating) };
-    if (minPrice || maxPrice) {
-      filter.salePrice = {};
-      if (minPrice) filter.salePrice.$gte = Number(minPrice);
-      if (maxPrice) filter.salePrice.$lte = Number(maxPrice);
-    }
+        const filter = { isActive: true };
+        if (search) filter.name = { $regex: search, $options: "i" };
+        if (category) filter.category = category;
+        if (region) filter.region = region;
+        if (rating) filter.averageRating = { $gte: Number(rating) };
+        if (minPrice || maxPrice) {
+            filter.salePrice = {};
+            if (minPrice) filter.salePrice.$gte = Number(minPrice);
+            if (maxPrice) filter.salePrice.$lte = Number(maxPrice);
+        }
+            
+        const dir = -1;
+        if (order === "asc") dir = 1;
+
+        let sort = { createdAt: -1 };
 
     const dir = order === "asc" ? 1 : -1;
     let sort = { createdAt: -1 };

@@ -30,6 +30,7 @@ async function sendMessage({ sender, receiver, content, type = "text" }) {
   });
 
   await message.populate("sender", "personalInfo.fullName avatar");
+  await message.populate("receiver", "personalInfo.fullName avatar role");
 
   // Update lastMessageAt
   conversation.lastMessageAt = new Date();
