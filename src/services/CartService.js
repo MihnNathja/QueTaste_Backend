@@ -50,10 +50,10 @@ class CartService {
 
         if (itemIndex > -1) {
             cart.items[itemIndex].quantity = quantity;
-        } 
+        }
         
         await cart.save();
-        return cart;    
+        return cart;
     }
 
     static async removeFromCart(userId, productId){

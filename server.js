@@ -15,6 +15,9 @@ const userViewRoutes = require("./src/routes/userViewRoutes");
 const reviewRoutes = require("./src/routes/reviewRoutes");
 
 const couponRoutes = require("./src/routes/couponRoutes");
+
+const statisticsRoutes = require("./src/routes/statisticsRoutes");
+
 dotenv.config();
 connectDB();
 require("./src/jobs/couponJob");
@@ -36,6 +39,7 @@ app.use("/api/favorites", favoriteRoutes);
 app.use("/api/userviews", userViewRoutes);
 app.use("/api/review", reviewRoutes);
 app.use("/api/coupon", couponRoutes);
+app.use("/api/statistics", statisticsRoutes);
 
 // Listen
 const PORT = process.env.PORT || 8088;

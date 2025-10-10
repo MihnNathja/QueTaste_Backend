@@ -7,124 +7,63 @@ const axios = require("axios");
 const crypto = require("crypto");
 const dayjs = require("dayjs");
 
-class OrderService {
-    // Checkout chung (COD hoặc MoMo)
-    static async checkout(userId, { paymentMethod, shippingAddress, notes, coupon }) {
-    const cart = await Cart.findOne({ user: userId }).populate("items.product");
-    if (!cart || cart.items.length === 0) throw new Error("Cart is empty");
+const SHIPPING_FEE = 36000;
 
-    // tính subtotal
+async function buildOrderItemsAndUpdateStock(cart) {
     let subtotal = 0;
     const orderItems = [];
-    for (const item of cart.items) {
-        const product = item.product;
+    for (const { product, quantity } of cart.items) {
         if (!product.isActive) throw new Error(`Product ${product.name} not available`);
-        if (product.stock < item.quantity) throw new Error(`Not enough stock for ${product.name}`);
-
+        if (product.stock < quantity) throw new Error(`Not enough stock for ${product.name}`);
         const price = product.salePrice > 0 ? product.salePrice : product.price;
-        subtotal += price * item.quantity;
-
-        orderItems.push({ product: product._id, quantity: item.quantity, price });
-
-        product.stock -= item.quantity;
-        product.totalSold += item.quantity;
+        subtotal += price * quantity;
+        orderItems.push({ product: product._id, quantity, price });
+        product.stock -= quantity;
+        product.totalSold += quantity;
         await product.save();
     }
+    return { subtotal, orderItems };
+}
 
-    const shippingFee = 36000;
-    let discount = 0;
-    let couponDoc = null;
+async function markCouponUsed(userId, couponDoc) {
+    if (!couponDoc) return;
+    await Promise.all([
+        UserCoupon.create({
+        userId,
+        couponId: couponDoc._id,
+        status: "used",
+        usedAt: new Date(),
+        startDate: couponDoc.startDate || new Date(),
+        endDate: couponDoc.endDate || null,
+        }),
+        Coupon.updateOne({ _id: couponDoc._id }, { $inc: { usedCount: 1 } }),
+    ]);
+}
 
-    if (coupon) {
-        couponDoc = await Coupon.findById(coupon);
-        if (!couponDoc) throw new Error("Coupon not found");
-        if (couponDoc.minOrderValue && subtotal < couponDoc.minOrderValue) {
-        throw new Error("Đơn hàng chưa đạt giá trị tối thiểu cho coupon này");
-        }
+async function createMomo(orderId, amount) {
+    const partnerCode = "MOMO";
+    const accessKey = "F8BBA842ECF85";
+    const secretKey = "K951B6PE1waDMi640xX08PD3vg6EkVlz";
+    const requestType = "captureWallet";
+    const requestId = orderId;
+    const orderInfo = `Thanh toan don hang ${orderId}`;
+    const redirectUrl = "http://localhost:5173/checkout/result";
+    const ipnUrl = "http://localhost:8088/api/order/momo/notify";
+    const extraData = "";
 
-        if (couponDoc.type === "percentage") {
-        discount = Math.min((subtotal * couponDoc.value) / 100, couponDoc.maxDiscount || Infinity);
-        } else if (couponDoc.type === "fixed") {
-        discount = Math.min(couponDoc.value, subtotal);
-        } else if (couponDoc.type === "free_shipping") {
-        discount = Math.min(shippingFee, couponDoc.maxDiscount || shippingFee);
-        }
-    }
-
-    if (couponDoc) {
-        // đánh dấu coupon đã được dùng
-        await UserCoupon.create({
-            userId,
-            couponId: couponDoc._id,
-            status: "used",
-            usedAt: new Date(),
-            startDate: couponDoc.startDate || new Date(),
-            endDate: couponDoc.endDate || null,
-        });
-
-        // đồng thời tăng đếm tổng số lượt dùng của coupon (nếu có dùng limit)
-        await Coupon.updateOne(
-            { _id: couponDoc._id },
-            { $inc: { usedCount: 1 } }
-        );
-    }
-
-    const finalAmount = subtotal - discount + shippingFee;
-
-    // tạo order
-    const order = new Order({
-        user: userId,
-        items: orderItems,
-        totalAmount: subtotal,
-        discount,
-        shippingFee,
-        finalAmount,
-        coupon: couponDoc?._id || null,
-        paymentMethod,
-        paymentStatus: "pending",
-        shippingAddress,
-        notes,
-        status: paymentMethod === "COD" ? "new" : "pending",
-    });
-
-    await order.save();
-
-    // clear cart nếu COD
-    if (paymentMethod === "COD") {
-        cart.items = [];
-        await cart.save();
-        return order;
-    }
-
-    // nếu momo thì tạo request thanh toán
-    if (paymentMethod === "momo") {
-        const orderId = order._id.toString();
-        const partnerCode = "MOMO";
-        const accessKey = "F8BBA842ECF85";
-        const secretKey = "K951B6PE1waDMi640xX08PD3vg6EkVlz";
-        const requestId = orderId;
-        const orderInfo = `Thanh toan don hang ${orderId}`;
-        const redirectUrl = "http://localhost:5173/checkout/result";
-        const ipnUrl = "http://localhost:8088/api/order/momo/notify";
-        const requestType = "captureWallet";
-        const extraData = "";
-
-        const rawSignature =
-        `accessKey=${accessKey}&amount=${finalAmount}&extraData=${extraData}&ipnUrl=${ipnUrl}` +
+    const rawSignature =
+        `accessKey=${accessKey}&amount=${amount}&extraData=${extraData}&ipnUrl=${ipnUrl}` +
         `&orderId=${orderId}&orderInfo=${orderInfo}&partnerCode=${partnerCode}` +
         `&redirectUrl=${redirectUrl}&requestId=${requestId}&requestType=${requestType}`;
 
-        const signature = crypto
-        .createHmac("sha256", secretKey)
-        .update(rawSignature)
-        .digest("hex");
+    const signature = crypto.createHmac("sha256", secretKey).update(rawSignature).digest("hex");
 
-        const requestBody = {
+    const body = {
         partnerCode,
         partnerName: "Test",
         storeId: "MomoTestStore",
         requestId,
-        amount: finalAmount,
+        amount,
         orderId,
         orderInfo,
         redirectUrl,
@@ -134,25 +73,91 @@ class OrderService {
         autoCapture: true,
         extraData,
         signature,
-        };
+    };
 
-        const response = await axios.post(
+    const { data } = await axios.post(
         "https://test-payment.momo.vn/v2/gateway/api/create",
-        requestBody,
+        body,
         { headers: { "Content-Type": "application/json" } }
-        );
+    );
+    return data.payUrl;
+}
 
-        return { order, payUrl: response.data.payUrl };
-    }
+class OrderService {
+    static async checkout(userId, { paymentMethod, shippingAddress, notes, coupon }) {
+        const cart = await Cart.findOne({ user: userId }).populate("items.product");
+        if (!cart?.items?.length) {
+            throw new Error("Cart is empty");
+        }
 
-    throw new Error("Unsupported payment method");
+        const supported = new Set(["COD", "momo"]);
+        if (!supported.has(paymentMethod)) {
+            throw new Error("Unsupported payment method");
+        }
+        const { subtotal, orderItems } = await buildOrderItemsAndUpdateStock(cart);
+        let discount = 0;
+        let couponDoc = null;
+
+        if (coupon) {
+            couponDoc = await Coupon.findById(coupon);
+            if (!couponDoc) {
+                throw new Error("Coupon not found");
+            }
+
+            const hasMinOrder = Boolean(couponDoc.minOrderValue);
+            if (hasMinOrder) {
+                const belowMin = subtotal < couponDoc.minOrderValue;
+                if (belowMin) {
+                    throw new Error("Đơn hàng chưa đạt giá trị tối thiểu");
+                }
+            }
+
+            if (couponDoc.type === "percentage") {
+                discount = Math.min((subtotal * couponDoc.value) / 100, couponDoc.maxDiscount || Infinity);
+            } else if (couponDoc.type === "fixed") {
+                discount = Math.min(couponDoc.value, subtotal);
+            } else if (couponDoc.type === "free_shipping") {
+                discount = Math.min(SHIPPING_FEE, couponDoc.maxDiscount || SHIPPING_FEE);
+            } else {
+                throw new Error("Unsupported coupon type");
+            }
+        }
+
+        const finalAmount = subtotal - discount + SHIPPING_FEE;
+        let orderStatus = "pending";
+        if (paymentMethod === "COD") {
+            orderStatus = "new";
+        }
+
+        const order = await Order.create({
+            user: userId,
+            items: orderItems,
+            totalAmount: subtotal,
+            discount,
+            shippingFee: SHIPPING_FEE,
+            finalAmount,
+            coupon: couponDoc?._id || null,
+            paymentMethod,
+            paymentStatus: "pending",
+            shippingAddress,
+            notes,
+            status: orderStatus,
+        });
+        await markCouponUsed(userId, couponDoc);
+
+        if (paymentMethod === "COD") {
+            cart.items = [];
+            await cart.save();
+            return order;
+        } else {
+            const payUrl = await createMomo(order._id.toString(), finalAmount);
+            return { order, payUrl };
+        }
     }
 
     static async getMyOrders(userId, { status, search, page = 1, limit = 10 } = {}) {
         try {
-
             const query = { user: userId }
-
             if (status && status !== "all") {
                 if (status === "pending")
                 {
@@ -182,19 +187,16 @@ class OrderService {
             }
 
             if (search) {
-            const productIds = await Product.find(
-                { name: { $regex: search, $options: "i" } },
-                { _id: 1 }
-            ).lean();
-
-            const ids = productIds.map(p => p._id);
-
-            query.$or = [
-                { "items.product": { $in: ids } },
-                { "shippingAddress.fullName": { $regex: search, $options: "i" } },
-            ];
+                const productIds = await Product.find(
+                    { name: { $regex: search, $options: "i" } },
+                    { _id: 1 }
+                ).lean();
+                const ids = productIds.map(p => p._id);
+                query.$or = [
+                    { "items.product": { $in: ids } },
+                    { "shippingAddress.fullName": { $regex: search, $options: "i" } },
+                ];
             }
-
 
             const orders = await Order.find(query)
             .sort({ createdAt: -1 })
@@ -205,7 +207,6 @@ class OrderService {
                 model: "Product",
                 select: "name price salePrice category images averageRating totalReviews",
             });
-
             return orders || [];
         } catch (err) {
             console.error("Error in getMyOrders:", err.message);
