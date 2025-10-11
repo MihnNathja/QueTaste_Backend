@@ -2,148 +2,165 @@ const Cart = require("../models/Cart");
 const Order = require("../models/Order");
 const Product = require("../models/Product");
 const Coupon = require("../models/Coupon");
+const UserCoupon = require("../models/UserCoupon");
 const axios = require("axios");
 const crypto = require("crypto");
 const dayjs = require("dayjs");
 
+const SHIPPING_FEE = 36000;
+
+async function buildOrderItemsAndUpdateStock(cart) {
+  let subtotal = 0;
+  const orderItems = [];
+  for (const { product, quantity } of cart.items) {
+    if (!product.isActive) throw new Error(`Product ${product.name} not available`);
+    if (product.stock < quantity) throw new Error(`Not enough stock for ${product.name}`);
+    const price = product.salePrice > 0 ? product.salePrice : product.price;
+    subtotal += price * quantity;
+    orderItems.push({ product: product._id, quantity, price });
+    product.stock -= quantity;
+    product.totalSold += quantity;
+    await product.save();
+  }
+  return { subtotal, orderItems };
+}
+
+async function markCouponUsed(userId, couponDoc) {
+  if (!couponDoc) return;
+  await Promise.all([
+    UserCoupon.create({
+      userId,
+      couponId: couponDoc._id,
+      status: "used",
+      usedAt: new Date(),
+      startDate: couponDoc.startDate || new Date(),
+      endDate: couponDoc.endDate || null,
+    }),
+    Coupon.updateOne({ _id: couponDoc._id }, { $inc: { usedCount: 1 } }),
+  ]);
+}
+
+async function createMomo(orderId, amount) {
+  const partnerCode = "MOMO";
+  const accessKey = "F8BBA842ECF85";
+  const secretKey = "K951B6PE1waDMi640xX08PD3vg6EkVlz";
+  const requestType = "captureWallet";
+  const requestId = orderId;
+  const orderInfo = `Thanh toan don hang ${orderId}`;
+  const redirectUrl = "http://localhost:5173/checkout/result";
+  const ipnUrl = "http://localhost:8088/api/order/momo/notify";
+  const extraData = "";
+
+  const rawSignature =
+    `accessKey=${accessKey}&amount=${amount}&extraData=${extraData}&ipnUrl=${ipnUrl}` +
+    `&orderId=${orderId}&orderInfo=${orderInfo}&partnerCode=${partnerCode}` +
+    `&redirectUrl=${redirectUrl}&requestId=${requestId}&requestType=${requestType}`;
+
+  const signature = crypto.createHmac("sha256", secretKey).update(rawSignature).digest("hex");
+
+  const body = {
+    partnerCode,
+    partnerName: "Test",
+    storeId: "MomoTestStore",
+    requestId,
+    amount,
+    orderId,
+    orderInfo,
+    redirectUrl,
+    ipnUrl,
+    lang: "vi",
+    requestType,
+    autoCapture: true,
+    extraData,
+    signature,
+  };
+
+  const { data } = await axios.post(
+    "https://test-payment.momo.vn/v2/gateway/api/create",
+    body,
+    { headers: { "Content-Type": "application/json" } }
+  );
+  return data.payUrl;
+}
+
 class OrderService {
-  // Checkout chung (COD hoặc MoMo)
-  static async checkout(
-    userId,
-    { paymentMethod, shippingAddress, notes, coupon }
-  ) {
+  /* === checkout: dùng bản của bạn === */
+  static async checkout(userId, { paymentMethod, shippingAddress, notes, coupon }) {
     const cart = await Cart.findOne({ user: userId }).populate("items.product");
-    if (!cart || cart.items.length === 0) throw new Error("Cart is empty");
-
-    // tính subtotal
-    let subtotal = 0;
-    const orderItems = [];
-    for (const item of cart.items) {
-      const product = item.product;
-      if (!product.isActive)
-        throw new Error(`Product ${product.name} not available`);
-      if (product.stock < item.quantity)
-        throw new Error(`Not enough stock for ${product.name}`);
-
-      const price = product.salePrice > 0 ? product.salePrice : product.price;
-      subtotal += price * item.quantity;
-
-      orderItems.push({ product: product._id, quantity: item.quantity, price });
-
-      product.stock -= item.quantity;
-      product.totalSold += item.quantity;
-      await product.save();
+    if (!cart?.items?.length) {
+      throw new Error("Cart is empty");
     }
 
-    const shippingFee = 36000;
+    const supported = new Set(["COD", "momo"]);
+    if (!supported.has(paymentMethod)) {
+      throw new Error("Unsupported payment method");
+    }
+
+    const { subtotal, orderItems } = await buildOrderItemsAndUpdateStock(cart);
     let discount = 0;
     let couponDoc = null;
 
     if (coupon) {
       couponDoc = await Coupon.findById(coupon);
-      if (!couponDoc) throw new Error("Coupon not found");
-      if (couponDoc.minOrderValue && subtotal < couponDoc.minOrderValue) {
-        throw new Error("Đơn hàng chưa đạt giá trị tối thiểu cho coupon này");
+      if (!couponDoc) {
+        throw new Error("Coupon not found");
+      }
+
+      const hasMinOrder = Boolean(couponDoc.minOrderValue);
+      if (hasMinOrder) {
+        const belowMin = subtotal < couponDoc.minOrderValue;
+        if (belowMin) {
+          throw new Error("Đơn hàng chưa đạt giá trị tối thiểu");
+        }
       }
 
       if (couponDoc.type === "percentage") {
-        discount = Math.min(
-          (subtotal * couponDoc.value) / 100,
-          couponDoc.maxDiscount || Infinity
-        );
+        discount = Math.min((subtotal * couponDoc.value) / 100, couponDoc.maxDiscount || Infinity);
       } else if (couponDoc.type === "fixed") {
         discount = Math.min(couponDoc.value, subtotal);
       } else if (couponDoc.type === "free_shipping") {
-        discount = Math.min(shippingFee, couponDoc.maxDiscount || shippingFee);
+        discount = Math.min(SHIPPING_FEE, couponDoc.maxDiscount || SHIPPING_FEE);
+      } else {
+        throw new Error("Unsupported coupon type");
       }
     }
 
-    const finalAmount = subtotal - discount + shippingFee;
+    const finalAmount = subtotal - discount + SHIPPING_FEE;
+    let orderStatus = "pending";
+    if (paymentMethod === "COD") {
+      orderStatus = "new";
+    }
 
-    // tạo order
-    const order = new Order({
+    const order = await Order.create({
       user: userId,
       items: orderItems,
       totalAmount: subtotal,
       discount,
-      shippingFee,
+      shippingFee: SHIPPING_FEE,
       finalAmount,
       coupon: couponDoc?._id || null,
       paymentMethod,
       paymentStatus: "pending",
       shippingAddress,
       notes,
-      status: paymentMethod === "COD" ? "new" : "pending",
+      status: orderStatus,
     });
 
-    await order.save();
+    await markCouponUsed(userId, couponDoc);
 
-    // clear cart nếu COD
     if (paymentMethod === "COD") {
       cart.items = [];
       await cart.save();
       return order;
+    } else {
+      const payUrl = await createMomo(order._id.toString(), finalAmount);
+      return { order, payUrl };
     }
-
-    // nếu momo thì tạo request thanh toán
-    if (paymentMethod === "momo") {
-      const orderId = order._id.toString();
-      const partnerCode = "MOMO";
-      const accessKey = "F8BBA842ECF85";
-      const secretKey = "K951B6PE1waDMi640xX08PD3vg6EkVlz";
-      const requestId = orderId;
-      const orderInfo = `Thanh toan don hang ${orderId}`;
-      const redirectUrl = "http://localhost:5173/checkout/result";
-      const ipnUrl = "http://localhost:8088/api/order/momo/notify";
-      const requestType = "captureWallet";
-      const extraData = "";
-
-      const rawSignature =
-        `accessKey=${accessKey}&amount=${finalAmount}&extraData=${extraData}&ipnUrl=${ipnUrl}` +
-        `&orderId=${orderId}&orderInfo=${orderInfo}&partnerCode=${partnerCode}` +
-        `&redirectUrl=${redirectUrl}&requestId=${requestId}&requestType=${requestType}`;
-
-      const signature = crypto
-        .createHmac("sha256", secretKey)
-        .update(rawSignature)
-        .digest("hex");
-
-      const requestBody = {
-        partnerCode,
-        partnerName: "Test",
-        storeId: "MomoTestStore",
-        requestId,
-        amount: finalAmount,
-        orderId,
-        orderInfo,
-        redirectUrl,
-        ipnUrl,
-        lang: "vi",
-        requestType,
-        autoCapture: true,
-        extraData,
-        signature,
-      };
-
-      const response = await axios.post(
-        "https://test-payment.momo.vn/v2/gateway/api/create",
-        requestBody,
-        { headers: { "Content-Type": "application/json" } }
-      );
-
-      return { order, payUrl: response.data.payUrl };
-    }
-
-    throw new Error("Unsupported payment method");
   }
 
-  static async getMyOrders(
-    userId,
-    { status, search, page = 1, limit = 10 } = {}
-  ) {
+  static async getMyOrders(userId, { status, search, page = 1, limit = 10 } = {}) {
     try {
       const query = { user: userId };
-
       if (status && status !== "all") {
         if (status === "pending") {
           query.$or = [{ status: "new" }, { status: "confirmed" }];
@@ -161,9 +178,7 @@ class OrderService {
           { name: { $regex: search, $options: "i" } },
           { _id: 1 }
         ).lean();
-
         const ids = productIds.map((p) => p._id);
-
         query.$or = [
           { "items.product": { $in: ids } },
           { "shippingAddress.fullName": { $regex: search, $options: "i" } },
@@ -177,35 +192,9 @@ class OrderService {
         .populate({
           path: "items.product",
           model: "Product",
-          select:
-            "name price salePrice category images averageRating totalReviews",
+          select: "name price salePrice category images averageRating totalReviews",
         });
 
-      // 🔹 Chuẩn hóa dữ liệu
-      const formatted = orders.map((o) => ({
-        id: o._id.toString(),
-        code: `DH${o._id.toString().slice(-6)}`, // mã đơn
-        shippingAddress: o.shippingAddress,
-        createdAt: dayjs(o.createdAt).format("YYYY-MM-DD HH:mm:ss"), // chuẩn hóa thời gian
-        updatedAt: dayjs(o.updatedAt).format("YYYY-MM-DD HH:mm:ss"),
-        status: o.status,
-        paymentMethod: o.paymentMethod,
-        paymentStatus: o.paymentStatus,
-        totalAmount: o.totalAmount,
-        shippingFee: o.shippingFee,
-        discount: o.discount,
-        finalAmount: o.finalAmount,
-        items: o.items,
-      }));
-
-      return {
-        data: formatted,
-        pagination: {
-          page,
-          limit,
-          total: await Order.countDocuments(query),
-        },
-      };
       return orders || [];
     } catch (err) {
       console.error("Error in getMyOrders:", err.message);
@@ -219,20 +208,14 @@ class OrderService {
 
     const diffMinutes = (Date.now() - order.createdAt.getTime()) / 1000 / 60;
 
-    // Nếu đã vào giai đoạn xử lý hoặc xa hơn
     if (order.status === "processing") {
-      throw new Error(
-        "Đơn hàng đã sang giai đoạn xử lý, vui lòng gửi Yêu cầu hủy"
-      );
+      throw new Error("Đơn hàng đã sang giai đoạn xử lý, vui lòng gửi Yêu cầu hủy");
     }
 
     if (["shipping", "delivering", "completed"].includes(order.status)) {
-      throw new Error(
-        "Đơn hàng đã qua giai đoạn xử lý, vui lòng gửi Yêu cầu hoàn/trả hàng"
-      );
+      throw new Error("Đơn hàng đã qua giai đoạn xử lý, vui lòng gửi Yêu cầu hoàn/trả hàng");
     }
 
-    // Nếu vẫn còn new/confirmed
     if (["new", "confirmed"].includes(order.status)) {
       if (diffMinutes > 30) {
         throw new Error("Chỉ có thể hủy trong vòng 30 phút sau khi đặt");
@@ -259,12 +242,9 @@ class OrderService {
       await order.save();
       return order;
     }
-    throw new Error(
-      "Chỉ có thể gửi yêu cầu hủy cho đơn hàng đang vận chuyển hoặc đã giao"
-    );
+    throw new Error("Chỉ có thể gửi yêu cầu hủy cho đơn hàng đang vận chuyển hoặc đã giao");
   }
 
-  // Xử lý notify từ MoMo (IPN server → server)
   static async handleMomoNotify(orderId, resultCode) {
     const order = await Order.findById(orderId);
     if (!order) throw new Error("Order not found");
@@ -273,7 +253,6 @@ class OrderService {
       order.paymentStatus = "paid";
       order.status = "new";
 
-      // ✅ clear cart khi thanh toán thành công
       const cart = await Cart.findOne({ user: order.user });
       if (cart) {
         cart.items = [];
@@ -288,7 +267,6 @@ class OrderService {
     return order;
   }
 
-  // Cập nhật trạng thái (frontend redirect gọi)
   static async updateStatus(orderId, resultCode) {
     const order = await Order.findById(orderId);
     if (!order) {
@@ -299,7 +277,6 @@ class OrderService {
       order.paymentStatus = "paid";
       order.status = "new";
 
-      // ✅ clear cart khi thanh toán thành công
       const cart = await Cart.findOne({ user: order.user });
       if (cart) {
         cart.items = [];
@@ -342,23 +319,20 @@ class OrderService {
         .populate({
           path: "items.product",
           model: "Product",
-          select:
-            "name price salePrice category images averageRating totalReviews",
+          select: "name price salePrice category images averageRating totalReviews",
         })
         .populate({
           path: "user",
           model: "User",
-          select:
-            "email personalInfo.fullName personalInfo.phone personalInfo.address",
+          select: "email personalInfo.fullName personalInfo.phone personalInfo.address",
         });
 
-      // 🔹 Chuẩn hóa dữ liệu
       const formatted = orders.map((o) => ({
         id: o._id.toString(),
-        code: `DH${o._id.toString().slice(-6)}`, // mã đơn
+        code: `DH${o._id.toString().slice(-6)}`,
         user: o.user,
         shippingAddress: o.shippingAddress,
-        createdAt: dayjs(o.createdAt).format("YYYY-MM-DD HH:mm:ss"), // chuẩn hóa thời gian
+        createdAt: dayjs(o.createdAt).format("YYYY-MM-DD HH:mm:ss"),
         updatedAt: dayjs(o.updatedAt).format("YYYY-MM-DD HH:mm:ss"),
         status: o.status,
         paymentMethod: o.paymentMethod,
@@ -383,6 +357,7 @@ class OrderService {
       throw new Error("Không thể lấy danh sách đơn hàng");
     }
   }
+
   static async updateOrderStatus(orderId, status) {
     const order = await Order.findById(orderId);
     if (!order) throw new Error("Order not found");
