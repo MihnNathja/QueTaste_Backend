@@ -6,7 +6,6 @@ const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const connectDB = require("./src/config/db");
 const { initSocket, getIO } = require("./src/config/socket");
-const connectDB = require("./src/config/db");
 const authRoutes = require("./src/routes/authRoutes");
 const userRoutes = require("./src/routes/userRoutes");
 const productRoutes = require("./src/routes/productRoutes");
@@ -45,8 +44,6 @@ app.use("/api/coupon", couponRoutes);
 dotenv.config();
 connectDB();
 require("./src/jobs/couponJob");
-
-const app = express();
 
 // Middleware
 app.use(express.json());
