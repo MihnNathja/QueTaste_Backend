@@ -19,21 +19,31 @@ const couponRoutes = require("./src/routes/couponRoutes");
 
 const notificationRoutes = require("./src/routes/notificationRoutes");
 const chatRoutes = require("./src/routes/chatRoutes");
+const adminProductRoutes = require("./src/routes/adminProductRoutes");
 const statisticsRoutes = require("./src/routes/statisticsRoutes");
 dotenv.config();
 connectDB();
 require("./src/jobs/couponJob");
 
 const app = express();
-
+const corsOptions = {
+  origin: ["http://localhost:5173"], // FE local
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: false, // true nếu dùng cookie
+};
 // Middleware
+app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 app.use(express.json());
-app.use(cors());
+
+
 
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/product", productRoutes);
+app.use("/api/admin/products", adminProductRoutes);
 app.use("/api/post", postRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/order", orderRoutes);
