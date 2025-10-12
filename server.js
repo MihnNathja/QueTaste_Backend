@@ -6,7 +6,6 @@ const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const connectDB = require("./src/config/db");
 const { initSocket, getIO } = require("./src/config/socket");
-
 const authRoutes = require("./src/routes/authRoutes");
 const userRoutes = require("./src/routes/userRoutes");
 const productRoutes = require("./src/routes/productRoutes");
@@ -17,9 +16,11 @@ const favoriteRoutes = require("./src/routes/favoriteRoutes");
 const userViewRoutes = require("./src/routes/userViewRoutes");
 const reviewRoutes = require("./src/routes/reviewRoutes");
 const couponRoutes = require("./src/routes/couponRoutes");
+
 const notificationRoutes = require("./src/routes/notificationRoutes");
 const chatRoutes = require("./src/routes/chatRoutes");
 const adminProductRoutes = require("./src/routes/adminProductRoutes");
+const statisticsRoutes = require("./src/routes/statisticsRoutes");
 dotenv.config();
 connectDB();
 require("./src/jobs/couponJob");
@@ -50,14 +51,32 @@ app.use("/api/favorites", favoriteRoutes);
 app.use("/api/userviews", userViewRoutes);
 app.use("/api/review", reviewRoutes);
 app.use("/api/coupon", couponRoutes);
+dotenv.config();
+connectDB();
+require("./src/jobs/couponJob");
+
+// Middleware
+app.use(express.json());
+app.use(cors());
+
+// Routes
+app.use("/api/auth", authRoutes);
+app.use("/api/user", userRoutes);
+app.use("/api/product", productRoutes);
+app.use("/api/post", postRoutes);
+app.use("/api/cart", cartRoutes);
+app.use("/api/order", orderRoutes);
+app.use("/api/favorites", favoriteRoutes);
+app.use("/api/userviews", userViewRoutes);
+app.use("/api/review", reviewRoutes);
+app.use("/api/coupon", couponRoutes);
+app.use("/api/statistics", statisticsRoutes);
 app.use("/api/coupon", couponRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/chat", chatRoutes);
 // ====== Socket.IO ======
 const server = http.createServer(app);
-const io = initSocket(server);
-
-io.use((socket, next) => {
+const io = initSocket(server);io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
   if (!token) return next(new Error("No token provided"));
 
