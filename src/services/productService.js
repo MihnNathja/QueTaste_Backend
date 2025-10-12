@@ -1,11 +1,12 @@
 const Product = require("../models/Product");
 const Order = require("../models/Order");
 const Review = require("../models/Review");
+const cloudinary = require("../config/cloudinary");
 class ProductService {
   static async getAllProducts(query) {
     const {
       page = 1,
-      limit,
+      limit = 10,
       search = "",
       category,
       region,
@@ -16,23 +17,20 @@ class ProductService {
       order = "desc",
     } = query;
 
-        const filter = { isActive: true };
-        if (search) filter.name = { $regex: search, $options: "i" };
-        if (category) filter.category = category;
-        if (region) filter.region = region;
-        if (rating) filter.averageRating = { $gte: Number(rating) };
-        if (minPrice || maxPrice) {
-            filter.salePrice = {};
-            if (minPrice) filter.salePrice.$gte = Number(minPrice);
-            if (maxPrice) filter.salePrice.$lte = Number(maxPrice);
-        }
-            
-        const dir = -1;
-        if (order === "asc") dir = 1;
+    const filter = { isActive: true };
+    if (search) filter.name = { $regex: search, $options: "i" };
+    if (category) filter.category = category;
+    if (region) filter.region = region;
+    if (rating) filter.averageRating = { $gte: Number(rating) };
+    if (minPrice || maxPrice) {
+      filter.salePrice = {};
+      if (minPrice) filter.salePrice.$gte = Number(minPrice);
+      if (maxPrice) filter.salePrice.$lte = Number(maxPrice);
+    }
 
-        let sort = { createdAt: -1 };
-
-    const dir = order === "asc" ? 1 : -1;
+    let dir = -1; 
+    if (order === "asc")  dir = 1;
+    
     let sort = { createdAt: -1 };
 
     if (sortBy === "totalSold") sort = { totalSold: dir };
@@ -98,6 +96,87 @@ class ProductService {
     ]);
 
     return { totalBuyers: orders, totalComments: reviews };
+  }
+
+  static async createProduct(data, files) {
+    if (files && files.length > 0) {
+      const uploaded = await Promise.all(
+        files.map((f) => cloudinary.uploader.upload(f.path))
+      );
+      data.images = uploaded.map((u) => u.secure_url);
+    }
+    const product = new Product(data);
+    return await product.save();
+  }
+
+  static async updateProduct(id, data, files) {
+    const product = await Product.findById(id);
+    if (!product) throw new Error("Product not found");
+
+    console.log("📦 [updateProduct] Incoming data:", data);
+    console.log("📸 [updateProduct] Files:", files?.length || 0);
+
+    let existingImages = [];
+    if (data.existingImages) {
+      try {
+        existingImages = JSON.parse(data.existingImages);
+      } catch (err) {
+        console.warn("⚠️ existingImages parse error:", err);
+        existingImages = [];
+      }
+    } else {
+      existingImages = product.images || [];
+    }
+
+    let newImageUrls = [];
+    if (files && files.length > 0) {
+      const uploaded = await Promise.all(
+        files.map((f) => cloudinary.uploader.upload(f.path))
+      );
+      newImageUrls = uploaded.map((u) => u.secure_url);
+    }
+
+    const finalImages = [...existingImages, ...newImageUrls];
+
+    const updatedData = {
+      name: data.name,
+      category: data.category,
+      region: data.region,
+      description: data.description,
+      price: Number(data.price) || 0,
+      salePrice: Number(data.salePrice) || 0,
+      stock: Number(data.stock) || 0,
+      images: finalImages,
+    };
+
+    Object.assign(product, updatedData);
+    await product.save();
+
+    console.log("✅ Product updated:", product._id);
+    return product;
+  }
+
+  static async toggleActive(id) {
+    const product = await Product.findById(id);
+    if (!product) throw new Error("Product not found");
+    product.isActive = !product.isActive;
+    await product.save();
+    return product;
+  }
+
+  static async deleteProduct(id) {
+    const product = await Product.findById(id);
+    if (!product) throw new Error("Product not found");
+
+    if (product.images && product.images.length > 0) {
+      const publicIds = product.images.map((url) =>
+        url.split("/").pop().split(".")[0]
+      );
+      await Promise.all(publicIds.map((id) => cloudinary.uploader.destroy(id)));
+    }
+
+    await product.deleteOne();
+    return true;
   }
 }
 

@@ -38,7 +38,10 @@ async function sendMessage({ sender, receiver, content, type = "text" }) {
 
   // Emit socket
   const io = getIO();
-  io.to(receiver.id.toString()).emit("chat:message", { conversationId: conversation._id, message });
+  const payload = { conversationId: conversation._id, message };
+
+  io.to(receiver.id.toString()).emit("chat:message", payload);
+  io.to(sender.id.toString()).emit("chat:message", payload);
 
   return message;
 }

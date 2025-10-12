@@ -44,3 +44,48 @@ exports.getProductStats = async (req, res) => {
   }
 };
 
+// POST /admin/products
+exports.createProduct = async (req, res) => {
+  try {
+    console.log("🧩 req.body:", req.body);
+    console.log("📂 req.files:", req.files);
+    const product = await ProductService.createProduct(req.body, req.files);
+    return sendResponse(res, 201, true, "Product created successfully", product);
+  } catch (err) {
+    console.error("❌ Error in createProduct:", err);
+    return sendResponse(res, 500, false, err.message);
+  }
+};
+
+// PUT /admin/products/:id
+exports.updateProduct = async (req, res) => {
+  try {
+    const product = await ProductService.updateProduct(req.params.id, req.body, req.files);
+    console.log("🧠 req.body:", req.body);
+console.log("📸 req.files:", req.files?.map(f => f.originalname));
+
+    return sendResponse(res, 200, true, "Product updated successfully", product);
+  } catch (err) {
+    return sendResponse(res, 500, false, err.message);
+  }
+};
+
+// PATCH /admin/products/:id/toggle
+exports.toggleActive = async (req, res) => {
+  try {
+    const product = await ProductService.toggleActive(req.params.id);
+    return sendResponse(res, 200, true, "Product status toggled", product);
+  } catch (err) {
+    return sendResponse(res, 500, false, err.message);
+  }
+};
+
+// DELETE /admin/products/:id
+exports.deleteProduct = async (req, res) => {
+  try {
+    await ProductService.deleteProduct(req.params.id);
+    return sendResponse(res, 200, true, "Product deleted successfully");
+  } catch (err) {
+    return sendResponse(res, 500, false, err.message);
+  }
+};
