@@ -12,6 +12,22 @@ exports.getAllProducts = async (req, res) => {
   }
 };
 
+// GET /product/suggest?q=Bánh&limit=8
+exports.suggestProducts = async (req, res) => {
+  try {
+    const visibility = req.visibility === "admin" ? "admin" : "public";
+    const q = (req.query.q || "").trim();
+    const limit = Number(req.query.limit) > 0 ? Number(req.query.limit) : 8;
+
+    if (!q) return sendResponse(res, 200, true, "OK", []);
+
+    const data = await ProductService.getSuggestions(q, { limit, visibility });
+    return sendResponse(res, 200, true, "Suggestions fetched", data);
+  } catch (err) {
+    return sendResponse(res, 500, false, err.message);
+  }
+};
+
 // GET /products/:id
 exports.getProductById = async (req, res) => {
   try {
@@ -84,6 +100,32 @@ exports.deleteProduct = async (req, res) => {
   try {
     await ProductService.deleteProduct(req.params.id);
     return sendResponse(res, 200, true, "Product deleted successfully");
+  } catch (err) {
+    return sendResponse(res, 500, false, err.message);
+  }
+};
+
+exports.bulkHide = async (req, res) => {
+  try {
+    const { ids = [] } = req.body || {};
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return sendResponse(res, 400, false, "ids required");
+    }
+    const data = await ProductService.bulkSetActive(ids, false);
+    return sendResponse(res, 200, true, "Hidden selected products", data);
+  } catch (err) {
+    return sendResponse(res, 500, false, err.message);
+  }
+};
+
+exports.bulkShow = async (req, res) => {
+  try {
+    const { ids = [] } = req.body || {};
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return sendResponse(res, 400, false, "ids required");
+    }
+    const data = await ProductService.bulkSetActive(ids, true);
+    return sendResponse(res, 200, true, "Shown selected products", data);
   } catch (err) {
     return sendResponse(res, 500, false, err.message);
   }

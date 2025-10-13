@@ -75,6 +75,25 @@ class ProductService {
     };
   }
 
+    static async getSuggestions(q, opts = {}) {
+    const { limit = 8, visibility } = opts;
+    const filter = {};
+
+    if (visibility !== "admin") filter.isActive = true;
+
+    filter.$or = [
+      { name: { $regex: q, $options: "i" } },
+    ];
+
+    const projection = { name: 1, images: 1, salePrice: 1, price: 1 };
+
+    // Ưu tiên bán chạy rồi mới tới mới nhất
+    const sort = { totalSold: -1, createdAt: -1 };
+
+    const items = await Product.find(filter, projection).sort(sort).limit(limit);
+    return items;
+  }
+
   static async getProductById(id, opts = {}) {
     const visibility = opts.visibility === 'admin' ? 'admin' : 'public';
     const product = await Product.findById(id);
@@ -196,6 +215,14 @@ class ProductService {
 
     await product.deleteOne();
     return true;
+  }
+
+  static async bulkSetActive(ids, isActive) {
+    const r = await Product.updateMany(
+      { _id: { $in: ids } },
+      { $set: { isActive: !!isActive } }
+    );
+    return { matched: r.matchedCount ?? r.n, modified: r.modifiedCount ?? r.nModified };
   }
 }
 
