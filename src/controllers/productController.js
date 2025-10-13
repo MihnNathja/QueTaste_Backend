@@ -12,6 +12,22 @@ exports.getAllProducts = async (req, res) => {
   }
 };
 
+// GET /product/suggest?q=Bánh&limit=8
+exports.suggestProducts = async (req, res) => {
+  try {
+    const visibility = req.visibility === "admin" ? "admin" : "public";
+    const q = (req.query.q || "").trim();
+    const limit = Number(req.query.limit) > 0 ? Number(req.query.limit) : 8;
+
+    if (!q) return sendResponse(res, 200, true, "OK", []);
+
+    const data = await ProductService.getSuggestions(q, { limit, visibility });
+    return sendResponse(res, 200, true, "Suggestions fetched", data);
+  } catch (err) {
+    return sendResponse(res, 500, false, err.message);
+  }
+};
+
 // GET /products/:id
 exports.getProductById = async (req, res) => {
   try {

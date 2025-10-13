@@ -10,6 +10,7 @@ const router = express.Router();
 router.use(authMiddleware, adminMiddleware, setVisibility('admin'));
 
 router.get("/", productController.getAllProducts);
+router.get("/suggest", productController.suggestProducts);
 router.post("/", upload.array("images", 5), productController.createProduct);
 router.get("/:id", productController.getProductById);
 router.put("/:id", upload.array("images", 5), productController.updateProduct);
