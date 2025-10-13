@@ -6,8 +6,11 @@ const UserCoupon = require("../models/UserCoupon");
 const axios = require("axios");
 const crypto = require("crypto");
 const dayjs = require("dayjs");
+const { default: mongoose } = require("mongoose");
 
 const SHIPPING_FEE = 36000;
+
+const THIRTY_MIN = 30 * 60 * 1000;
 
 async function buildOrderItemsAndUpdateStock(cart) {
   let subtotal = 0;
@@ -396,6 +399,66 @@ class OrderService {
     order.status = status;
     await order.save();
     return order;
+  }
+
+  static async confirmOrders(listOrderIds) {
+    // Chuẩn hóa & loại trùng ID
+    const ids = [...new Set(listOrderIds)].map(
+      (id) => new mongoose.Types.ObjectId(id)
+    );
+    // Lấy toàn bộ đơn tồn tại trong danh sách
+    const found = await Order.find(
+      { _id: { $in: ids } },
+      { _id: 1, status: 1 }
+    );
+
+    const foundIds = new Set(found.map((o) => String(o._id)));
+
+    // 1) Các đơn không tìm thấy
+    const notFound = listOrderIds.filter((id) => !foundIds.has(String(id)));
+
+    // 2) Các đơn sai trạng thái (khác "new" hoặc quá 30 phút)
+    const skippedInvalid = found
+      .filter((o) => {
+        const createdMs = Date.parse(o.createdAt);
+        if (!Number.isFinite(createdMs)) return true; // coi như invalid
+        const ageMs = Math.max(0, Date.now() - createdMs);
+        const isNew = o.status === "new";
+        return !isNew || ageMs > THIRTY_MIN;
+      })
+      .map((o) => ({ id: String(o._id), status: o.status }));
+
+    // 3) Các đơn hợp lệ để cập nhật
+    const validIds = found
+      .filter((o) => {
+        const createdMs = Date.parse(o.createdAt);
+        if (!Number.isFinite(createdMs)) return false;
+        const ageMs = Math.max(0, Date.now() - createdMs);
+        const isNew = o.status === "new";
+        return isNew && ageMs <= THIRTY_MIN;
+      })
+      .map((o) => o._id);
+
+    // Cập nhật hàng loạt chỉ các đơn đang "new"
+    let updatedCount = 0;
+    if (validIds.length) {
+      const upd = await Order.updateMany(
+        { _id: { $in: validIds }, status: "new" },
+        { $set: { status: "confirmed", updatedAt: new Date() } }
+      );
+      updatedCount = upd.modifiedCount || 0;
+    }
+
+    // Lấy lại các đơn đã cập nhật để trả về
+    const updated =
+      validIds.length > 0 ? await Order.find({ _id: { $in: validIds } }) : [];
+
+    return {
+      updatedCount,
+      updated,
+      skippedInvalid,
+      notFound,
+    };
   }
 }
 
