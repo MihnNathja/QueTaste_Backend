@@ -3,10 +3,11 @@ const productController = require("../controllers/productController");
 const adminMiddleware = require("../middleware/adminMiddleware");
 const authMiddleware = require("../middleware/authMiddleware");
 const upload = require("../middleware/uploadMiddleware");
+const setVisibility = require("../middleware/visibilityMiddleware");
 
 const router = express.Router();
 
-router.use(authMiddleware, adminMiddleware);
+router.use(authMiddleware, adminMiddleware, setVisibility('admin'));
 
 router.get("/", productController.getAllProducts);
 router.post("/", upload.array("images", 5), productController.createProduct);
