@@ -10,4 +10,6 @@ router.get("/", reviewController.getReviewsByProduct);
 
 router.get("/admin", reviewController.getAllReviews);
 
+router.delete("/admin/delete/:id", reviewController.deleteReview);
+
 module.exports = router;

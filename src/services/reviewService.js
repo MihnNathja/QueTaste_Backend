@@ -120,6 +120,8 @@ class ReviewService {
     orderBy = "newest", // newest | oldest | highest | lowest
     page = 1,
     limit = 10,
+    includeDeleted = true, // ✅ admin: mặc định lấy cả đã xoá
+    onlyDeleted = false, // ✅ tùy chọn: chỉ lấy bản đã xoá
   } = {}) {
     try {
       const query = {};
@@ -130,8 +132,16 @@ class ReviewService {
       // ====== Lọc theo rating ======
       if (rating) query.rating = rating;
 
-      // ====== Lọc theo trạng thái ======
-      if (status) query.status = status; // visible | hidden | reported
+      // ====== Soft-delete flags ======
+      if (onlyDeleted) {
+        // Chỉ lấy bản đã xoá
+        query.isDeleted = true;
+        // Không cần includeDeleted nữa vì đã filter trực tiếp
+      } else if (includeDeleted) {
+        // Lấy cả đã xoá lẫn chưa xoá (middleware sẽ bỏ filter mặc định)
+        query.includeDeleted = true; // flag cho pre(/^find/)
+      }
+      // Nếu cả 2 false -> mặc định lấy chưa xoá (middleware tự thêm { isDeleted: false })
 
       // ====== Tìm kiếm (nội dung, email, tên user) ======
       if (search && search.trim() !== "") {
@@ -143,12 +153,12 @@ class ReviewService {
         }).select("_id");
 
         query.$or = [
-          { content: { $regex: search, $options: "i" } },
+          { comment: { $regex: search, $options: "i" } },
           { user: { $in: users.map((u) => u._id) } },
         ];
       }
 
-      // ====== Xử lý sắp xếp ======
+      // ====== Sắp xếp ======
       let sortOption = {};
       switch (orderBy) {
         case "oldest":
@@ -164,10 +174,16 @@ class ReviewService {
           sortOption = { createdAt: -1 }; // newest
       }
 
-      // ====== Đếm tổng số review ======
-      const total = await Review.countDocuments(query);
+      // ====== Đếm tổng số ======
+      // Tránh bug do includeDeleted trong countDocuments (middleware count có thể chưa thêm)
+      const countFilter = { ...query };
+      delete countFilter.includeDeleted;
 
-      // ====== Lấy dữ liệu chính ======
+      const total = await Review.countDocuments(countFilter);
+
+      console.log("QUERY USED IN FIND:", query);
+      console.log("sortOption:", sortOption);
+      // ====== Lấy dữ liệu ======
       const reviews = await Review.find(query)
         .sort(sortOption)
         .skip((page - 1) * limit)
@@ -183,7 +199,6 @@ class ReviewService {
           select: "name image",
         });
 
-      // ====== Trả về kết quả ======
       return {
         items: reviews,
         pagination: {
@@ -194,8 +209,17 @@ class ReviewService {
         },
       };
     } catch (err) {
-      console.error("Error in getAllReviews:", err.message);
+      console.error("Error in getAllReviews:", err);
       throw new Error("Không thể lấy danh sách đánh giá");
+    }
+  }
+
+  static async deleteReview(id) {
+    try {
+      return await Review.findById(id).then((r) => r?.softDelete());
+    } catch (err) {
+      console.error("Error in deleteReview:", err.message);
+      throw new Error("Không thể xóa đánh giá");
     }
   }
 }
