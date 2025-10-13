@@ -4,8 +4,9 @@ const ProductService = require("../services/productService");
 // GET /products
 exports.getAllProducts = async (req, res) => {
   try {
-    const products = await ProductService.getAllProducts(req.query);
-    return sendResponse(res, 200, true, "Products fetched", products);
+    const visibility = req.visibility === 'admin' ? 'admin' : 'public';
+    const data = await ProductService.getAllProducts(req.query, { visibility });
+    return sendResponse(res, 200, true, "Products fetched", data);
   } catch (err) {
     return sendResponse(res, 500, false, err.message);
   }
@@ -14,7 +15,7 @@ exports.getAllProducts = async (req, res) => {
 // GET /products/:id
 exports.getProductById = async (req, res) => {
   try {
-    const product = await ProductService.getProductById(req.params.id);
+    const product = await ProductService.getProductById(req.params.id, { visibility: 'admin' });
     if (!product) {
       return sendResponse(res, 404, false, "Product not found");
     }
@@ -47,8 +48,6 @@ exports.getProductStats = async (req, res) => {
 // POST /admin/products
 exports.createProduct = async (req, res) => {
   try {
-    console.log("🧩 req.body:", req.body);
-    console.log("📂 req.files:", req.files);
     const product = await ProductService.createProduct(req.body, req.files);
     return sendResponse(res, 201, true, "Product created successfully", product);
   } catch (err) {

@@ -3,7 +3,8 @@ const Order = require("../models/Order");
 const Review = require("../models/Review");
 const cloudinary = require("../config/cloudinary");
 class ProductService {
-  static async getAllProducts(query) {
+  static async getAllProducts(query, opts = {}) {
+   const visibility = opts.visibility === 'admin' ? 'admin' : 'public';
     const {
       page = 1,
       limit = 10,
@@ -15,9 +16,12 @@ class ProductService {
       maxPrice,
       sortBy = "createdAt", // createdAt | totalSold | views | price | rating | discount
       order = "desc",
+      includeInactive,
     } = query;
 
-    const filter = { isActive: true };
+    const filter = {};
+    if (visibility !== 'admin') filter.isActive = true;
+
     if (search) filter.name = { $regex: search, $options: "i" };
     if (category) filter.category = category;
     if (region) filter.region = region;
@@ -40,27 +44,42 @@ class ProductService {
       sort = { averageRating: dir, totalReviews: -1 };
     else if (sortBy === "createdAt") sort = { createdAt: dir };
 
+    const shouldPaginate = !!limit && limit !== "all" && Number(limit) > 0;
     let q = Product.find(filter).sort(sort);
-    if (limit) q = q.skip((page - 1) * limit).limit(parseInt(limit));
+    if (shouldPaginate) {
+      q = q.skip((page - 1) * Number(limit)).limit(Number(limit));
+    }
 
-    const [products, total] = await Promise.all([
+    const filterNoStatus = { ...filter };
+    delete filterNoStatus.isActive;
+
+    const [products, total, totalActive, totalInactive, outOfStock] = await Promise.all([
       q,
-      Product.countDocuments(filter),
+      Product.countDocuments(filterNoStatus),
+      Product.countDocuments({ ...filterNoStatus, isActive: true }),
+      Product.countDocuments({ ...filterNoStatus, isActive: false }),
+      Product.countDocuments({ ...filterNoStatus, stock: 0 }),
     ]);
 
     return {
       products,
       total,
-      currentPage: parseInt(page),
-      totalPage: limit ? Math.ceil(total / limit) : 1,
+      currentPage: shouldPaginate ? parseInt(page) : 1,
+      totalPage: shouldPaginate ? Math.ceil(total / Number(limit)) : 1,
+      stats: {
+        total,
+        active: totalActive,
+        inactive: totalInactive,
+        outOfStock,
+      },
     };
   }
 
-  static async getProductById(id) {
+  static async getProductById(id, opts = {}) {
+    const visibility = opts.visibility === 'admin' ? 'admin' : 'public';
     const product = await Product.findById(id);
-    if (!product || !product.isActive) {
-      throw new Error("Product not found");
-    }
+    if (!product) throw new Error("Product not found");
+    if (visibility !== 'admin' && !product.isActive) throw new Error("Product not found");
 
     product.views += 1;
     await product.save();
