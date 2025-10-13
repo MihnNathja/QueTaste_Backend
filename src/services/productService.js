@@ -216,6 +216,14 @@ class ProductService {
     await product.deleteOne();
     return true;
   }
+
+  static async bulkSetActive(ids, isActive) {
+    const r = await Product.updateMany(
+      { _id: { $in: ids } },
+      { $set: { isActive: !!isActive } }
+    );
+    return { matched: r.matchedCount ?? r.n, modified: r.modifiedCount ?? r.nModified };
+  }
 }
 
 module.exports = ProductService;

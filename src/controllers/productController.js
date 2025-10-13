@@ -104,3 +104,29 @@ exports.deleteProduct = async (req, res) => {
     return sendResponse(res, 500, false, err.message);
   }
 };
+
+exports.bulkHide = async (req, res) => {
+  try {
+    const { ids = [] } = req.body || {};
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return sendResponse(res, 400, false, "ids required");
+    }
+    const data = await ProductService.bulkSetActive(ids, false);
+    return sendResponse(res, 200, true, "Hidden selected products", data);
+  } catch (err) {
+    return sendResponse(res, 500, false, err.message);
+  }
+};
+
+exports.bulkShow = async (req, res) => {
+  try {
+    const { ids = [] } = req.body || {};
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return sendResponse(res, 400, false, "ids required");
+    }
+    const data = await ProductService.bulkSetActive(ids, true);
+    return sendResponse(res, 200, true, "Shown selected products", data);
+  } catch (err) {
+    return sendResponse(res, 500, false, err.message);
+  }
+};
