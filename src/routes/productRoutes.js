@@ -1,8 +1,8 @@
 const express = require("express");
 const productController = require("../controllers/productController");
-
+const setVisibility = require("../middleware/visibilityMiddleware");
 const router = express.Router();
-
+router.use(setVisibility('public'));
 // Lấy tất cả sản phẩm (có phân trang + lọc + sort)
 router.get("/", productController.getAllProducts);
 
