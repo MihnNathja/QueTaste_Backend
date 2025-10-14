@@ -5,13 +5,7 @@ exports.getProfile = async (req, res) => {
   try {
     const user = await userService.getProfile(req.user.id);
     if (!user) return sendResponse(res, 404, false, "User not found");
-    return sendResponse(
-      res,
-      200,
-      true,
-      "User profile retrieved successfully",
-      user
-    );
+    return sendResponse(res, 200, true, "User profile retrieved successfully", user);
   } catch (err) {
     return sendResponse(res, 500, false, err.message);
   }
@@ -20,19 +14,9 @@ exports.getProfile = async (req, res) => {
 exports.updateProfile = async (req, res) => {
   try {
     console.log(req.body);
-    const updatedUser = await userService.updateProfile(
-      req.user.id,
-      req.body,
-      req.file
-    );
+    const updatedUser = await userService.updateProfile(req.user.id, req.body, req.file);
     if (!updatedUser) return sendResponse(res, 404, false, "User not found");
-    return sendResponse(
-      res,
-      200,
-      true,
-      "Profile updated successfully",
-      updatedUser
-    );
+    return sendResponse(res, 200, true, "Profile updated successfully", updatedUser);
   } catch (err) {
     return sendResponse(res, 500, false, err.message);
   }
