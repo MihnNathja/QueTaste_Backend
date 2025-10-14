@@ -1,48 +1,38 @@
 const Post = require("../models/Post");
 
 class PostService {
-    static async getAllPosts(query) {
+    static async getAllPosts(query, opts = {}) {
         const { page = 1, limit, search = "" } = query;
-
-        let q = Post.find({
-            isPublished: true,
-            title: { $regex: search, $options: "i" },
-        }).populate("author", "personalInfo fullName avatar");
-
-        if (limit) {
-            q = q.skip((page - 1) * limit).limit(parseInt(limit));
-        }
-
-        q = q.sort({ createdAt: -1 }); // mới nhất lên đầu
-
+        const { includeAll = false } = opts;
+        const filter = { title: { $regex: search, $options: "i" } };
+        if (!includeAll) filter.isPublished = true;
+        let q = Post.find(filter).populate("author", "personalInfo fullName avatar");
+        if (limit) q = q.skip((page - 1) * parseInt(limit)).limit(parseInt(limit));
+        q = q.sort({ createdAt: -1 });
         return await q;
     }
 
-    static async getPostById(id){
-        const post = await Post.findById(id).populate("author", "personalInfo fullName avatar");
-
-        if(!post || !post.isPublished){
-            throw new Error("Post not found");
-        }
-
-        // tăng views khi xem
-        post.views += 1;
+    static async getPostById(id, opts = {}) {
+        const { includeAll = false, preview = false } = opts;
+        const post = await Post.findById(id).populate("author", "personalInfo fullName email avatar");
+        if (!post) throw new Error("Post not found");
+        if (!includeAll && !post.isPublished) throw new Error("Post not found");
+        if (!preview) {
+        post.views = (post.views || 0) + 1;
         await post.save();
-
+        }
         return post;
     }
 
-    static async getPostBySlug(slug) {
+    static async getPostBySlug(slug, opts = {}) {
+        const { includeAll = false, preview = false } = opts;
         const post = await Post.findOne({ slug }).populate("author", "personalInfo fullName email avatar");
-
-        if(!post || !post.isPublished){
-            throw new Error("Post not found");
-        }
-
-        // tăng views
-        post.views += 1;
+        if (!post) throw new Error("Post not found");
+        if (!includeAll && !post.isPublished) throw new Error("Post not found");
+        if (!preview) {
+        post.views = (post.views || 0) + 1;
         await post.save();
-
+        }
         return post;
     }
 }
