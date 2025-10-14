@@ -24,6 +24,7 @@ const statisticsRoutes = require("./src/routes/statisticsRoutes");
 dotenv.config();
 connectDB();
 require("./src/jobs/couponJob");
+require("./src/jobs/orderJob");
 
 const app = express();
 const corsOptions = {
@@ -36,8 +37,6 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
 app.use(express.json());
-
-
 
 // Routes
 app.use("/api/auth", authRoutes);
@@ -76,7 +75,8 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/chat", chatRoutes);
 // ====== Socket.IO ======
 const server = http.createServer(app);
-const io = initSocket(server);io.use((socket, next) => {
+const io = initSocket(server);
+io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
   if (!token) return next(new Error("No token provided"));
 
