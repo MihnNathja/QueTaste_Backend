@@ -65,7 +65,8 @@ async function markSeen(conversationId, userId) {
 }
 
 async function getConversations(userId, role) {
-  const filter = role === "admin" ? {} : { "participants.user": userId };
+  const filter = { "participants.user": userId };
+
   return Conversation.find(filter)
     .sort({ lastMessageAt: -1 })
     .populate("participants.user", "personalInfo.fullName avatar role");
