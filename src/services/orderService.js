@@ -6,15 +6,20 @@ const UserCoupon = require("../models/UserCoupon");
 const axios = require("axios");
 const crypto = require("crypto");
 const dayjs = require("dayjs");
+const { default: mongoose } = require("mongoose");
 
 const SHIPPING_FEE = 36000;
+
+const THIRTY_MIN = 30 * 60 * 1000;
 
 async function buildOrderItemsAndUpdateStock(cart) {
   let subtotal = 0;
   const orderItems = [];
   for (const { product, quantity } of cart.items) {
-    if (!product.isActive) throw new Error(`Product ${product.name} not available`);
-    if (product.stock < quantity) throw new Error(`Not enough stock for ${product.name}`);
+    if (!product.isActive)
+      throw new Error(`Product ${product.name} not available`);
+    if (product.stock < quantity)
+      throw new Error(`Not enough stock for ${product.name}`);
     const price = product.salePrice > 0 ? product.salePrice : product.price;
     subtotal += price * quantity;
     orderItems.push({ product: product._id, quantity, price });
@@ -56,7 +61,10 @@ async function createMomo(orderId, amount) {
     `&orderId=${orderId}&orderInfo=${orderInfo}&partnerCode=${partnerCode}` +
     `&redirectUrl=${redirectUrl}&requestId=${requestId}&requestType=${requestType}`;
 
-  const signature = crypto.createHmac("sha256", secretKey).update(rawSignature).digest("hex");
+  const signature = crypto
+    .createHmac("sha256", secretKey)
+    .update(rawSignature)
+    .digest("hex");
 
   const body = {
     partnerCode,
@@ -85,7 +93,10 @@ async function createMomo(orderId, amount) {
 
 class OrderService {
   /* === checkout: dùng bản của bạn === */
-  static async checkout(userId, { paymentMethod, shippingAddress, notes, coupon }) {
+  static async checkout(
+    userId,
+    { paymentMethod, shippingAddress, notes, coupon }
+  ) {
     const cart = await Cart.findOne({ user: userId }).populate("items.product");
     if (!cart?.items?.length) {
       throw new Error("Cart is empty");
@@ -115,11 +126,17 @@ class OrderService {
       }
 
       if (couponDoc.type === "percentage") {
-        discount = Math.min((subtotal * couponDoc.value) / 100, couponDoc.maxDiscount || Infinity);
+        discount = Math.min(
+          (subtotal * couponDoc.value) / 100,
+          couponDoc.maxDiscount || Infinity
+        );
       } else if (couponDoc.type === "fixed") {
         discount = Math.min(couponDoc.value, subtotal);
       } else if (couponDoc.type === "free_shipping") {
-        discount = Math.min(SHIPPING_FEE, couponDoc.maxDiscount || SHIPPING_FEE);
+        discount = Math.min(
+          SHIPPING_FEE,
+          couponDoc.maxDiscount || SHIPPING_FEE
+        );
       } else {
         throw new Error("Unsupported coupon type");
       }
@@ -158,7 +175,10 @@ class OrderService {
     }
   }
 
-  static async getMyOrders(userId, { status, search, page = 1, limit = 10 } = {}) {
+  static async getMyOrders(
+    userId,
+    { status, search, page = 1, limit = 10 } = {}
+  ) {
     try {
       const query = { user: userId };
       if (status && status !== "all") {
@@ -192,10 +212,17 @@ class OrderService {
         .populate({
           path: "items.product",
           model: "Product",
-          select: "name price salePrice category images averageRating totalReviews",
+          select:
+            "name price salePrice category images averageRating totalReviews",
         });
-
-      return orders || [];
+      return {
+        data: orders,
+        pagination: {
+          page,
+          limit,
+          total: await Order.countDocuments(query),
+        },
+      };
     } catch (err) {
       console.error("Error in getMyOrders:", err.message);
       throw new Error("Không thể lấy danh sách đơn hàng");
@@ -209,11 +236,15 @@ class OrderService {
     const diffMinutes = (Date.now() - order.createdAt.getTime()) / 1000 / 60;
 
     if (order.status === "processing") {
-      throw new Error("Đơn hàng đã sang giai đoạn xử lý, vui lòng gửi Yêu cầu hủy");
+      throw new Error(
+        "Đơn hàng đã sang giai đoạn xử lý, vui lòng gửi Yêu cầu hủy"
+      );
     }
 
     if (["shipping", "delivering", "completed"].includes(order.status)) {
-      throw new Error("Đơn hàng đã qua giai đoạn xử lý, vui lòng gửi Yêu cầu hoàn/trả hàng");
+      throw new Error(
+        "Đơn hàng đã qua giai đoạn xử lý, vui lòng gửi Yêu cầu hoàn/trả hàng"
+      );
     }
 
     if (["new", "confirmed"].includes(order.status)) {
@@ -242,7 +273,9 @@ class OrderService {
       await order.save();
       return order;
     }
-    throw new Error("Chỉ có thể gửi yêu cầu hủy cho đơn hàng đang vận chuyển hoặc đã giao");
+    throw new Error(
+      "Chỉ có thể gửi yêu cầu hủy cho đơn hàng đang vận chuyển hoặc đã giao"
+    );
   }
 
   static async handleMomoNotify(orderId, resultCode) {
@@ -319,12 +352,14 @@ class OrderService {
         .populate({
           path: "items.product",
           model: "Product",
-          select: "name price salePrice category images averageRating totalReviews",
+          select:
+            "name price salePrice category images averageRating totalReviews",
         })
         .populate({
           path: "user",
           model: "User",
-          select: "email personalInfo.fullName personalInfo.phone personalInfo.address",
+          select:
+            "email personalInfo.fullName personalInfo.phone personalInfo.address",
         });
 
       const formatted = orders.map((o) => ({
@@ -364,6 +399,66 @@ class OrderService {
     order.status = status;
     await order.save();
     return order;
+  }
+
+  static async confirmOrders(listOrderIds) {
+    // Chuẩn hóa & loại trùng ID
+    const ids = [...new Set(listOrderIds)].map(
+      (id) => new mongoose.Types.ObjectId(id)
+    );
+    // Lấy toàn bộ đơn tồn tại trong danh sách
+    const found = await Order.find(
+      { _id: { $in: ids } },
+      { _id: 1, status: 1 }
+    );
+
+    const foundIds = new Set(found.map((o) => String(o._id)));
+
+    // 1) Các đơn không tìm thấy
+    const notFound = listOrderIds.filter((id) => !foundIds.has(String(id)));
+
+    // 2) Các đơn sai trạng thái (khác "new" hoặc quá 30 phút)
+    const skippedInvalid = found
+      .filter((o) => {
+        const createdMs = Date.parse(o.createdAt);
+        if (!Number.isFinite(createdMs)) return true; // coi như invalid
+        const ageMs = Math.max(0, Date.now() - createdMs);
+        const isNew = o.status === "new";
+        return !isNew || ageMs > THIRTY_MIN;
+      })
+      .map((o) => ({ id: String(o._id), status: o.status }));
+
+    // 3) Các đơn hợp lệ để cập nhật
+    const validIds = found
+      .filter((o) => {
+        const createdMs = Date.parse(o.createdAt);
+        if (!Number.isFinite(createdMs)) return false;
+        const ageMs = Math.max(0, Date.now() - createdMs);
+        const isNew = o.status === "new";
+        return isNew && ageMs <= THIRTY_MIN;
+      })
+      .map((o) => o._id);
+
+    // Cập nhật hàng loạt chỉ các đơn đang "new"
+    let updatedCount = 0;
+    if (validIds.length) {
+      const upd = await Order.updateMany(
+        { _id: { $in: validIds }, status: "new" },
+        { $set: { status: "confirmed", updatedAt: new Date() } }
+      );
+      updatedCount = upd.modifiedCount || 0;
+    }
+
+    // Lấy lại các đơn đã cập nhật để trả về
+    const updated =
+      validIds.length > 0 ? await Order.find({ _id: { $in: validIds } }) : [];
+
+    return {
+      updatedCount,
+      updated,
+      skippedInvalid,
+      notFound,
+    };
   }
 }
 

@@ -46,3 +46,15 @@ exports.getAllReviews = async (req, res) => {
     return sendResponse(res, 500, false, err.message);
   }
 };
+
+// DELETE /admin/delete/
+exports.deleteReview = async (req, res) => {
+  try {
+    //console.log("req.query: ", req.query);
+    const id = req.params.id;
+    const reviews = await ReviewService.deleteReview(id);
+    return sendResponse(res, 200, true, "Reviews fetched", reviews);
+  } catch (err) {
+    return sendResponse(res, 500, false, err.message);
+  }
+};

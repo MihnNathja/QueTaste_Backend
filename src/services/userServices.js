@@ -40,14 +40,11 @@ const updateProfile = async (userId, body, file) => {
   ).select("-password -__v");
 };
 
-const searchUsers = async (keyword, role) => {
+const searchUsers = async (keyword) => {
   const filter = {};
 
   if (keyword) {
     filter["personalInfo.fullName"] = { $regex: keyword, $options: "i" };
-  }
-  if (role) {
-    filter.role = role;
   }
 
   return await User.find(filter).select(

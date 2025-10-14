@@ -29,7 +29,7 @@ class AuthService {
         return new Promise((resolve, reject) => {
         jwt.verify(token, process.env.JWT_REFRESH_SECRET, (err, decoded) => {
             if (err) return reject(new Error("Invalid refresh token"));
-                const accessToken = jwt.sign({ id: decoded.id }, process.env.JWT_SECRET, { expiresIn: "15m" });
+                const accessToken = jwt.sign({ id: decoded.id }, process.env.JWT_SECRET, { expiresIn: "1d" });
                 resolve({ accessToken });
             });
         });

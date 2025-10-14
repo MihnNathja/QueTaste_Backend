@@ -158,3 +158,36 @@ exports.confirmOrder = async (req, res) => {
     return sendResponse(res, 400, false, err.message);
   }
 };
+
+exports.confirmOrders = async (req, res) => {
+  try {
+    const { listOrderId } = req.body;
+    console.log(listOrderId);
+
+    if (!Array.isArray(listOrderId) || listOrderId.length === 0) {
+      return sendResponse(
+        res,
+        400,
+        false,
+        "listOrderIds must be a non-empty array"
+      );
+    }
+
+    const orders = await OrderService.confirmOrders(listOrderId);
+    return sendResponse(
+      res,
+      200,
+      true,
+      "Orders confirmed successfully",
+      orders
+    );
+  } catch (err) {
+    console.error("Confirm orders error:", err);
+    return sendResponse(
+      res,
+      500,
+      false,
+      err.message || "Internal server error"
+    );
+  }
+};

@@ -24,8 +24,8 @@ exports.updateProfile = async (req, res) => {
 
 exports.searchUsers = async (req, res) => {
   try {
-    const { q, role } = req.query;
-    const users = await userService.searchUsers(q, role);
+    const { q } = req.query;
+    const users = await userService.searchUsers(q);
     return sendResponse(res, 200, true, "Users fetched", users);
   } catch (err) {
     return sendResponse(res, 500, false, err.message);
