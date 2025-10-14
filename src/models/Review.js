@@ -29,15 +29,16 @@ const reviewSchema = new mongoose.Schema(
 reviewSchema.pre(/^find/, function (next) {
   const q = this.getFilter() || {};
 
-  // Nếu không yêu cầu includeDeleted và chưa chỉ định isDeleted cụ thể
-  if (!q.includeDeleted && q.isDeleted === undefined) {
-    this.where({ isDeleted: { $ne: true } });
+  // ✅ Nếu có includeDeleted: bỏ lọc mặc định
+  if (q.includeDeleted) {
+    delete q.includeDeleted;
+    this.setQuery(q);
+    return next(); // dừng luôn, không thêm filter
   }
 
-  // Luôn xóa flag includeDeleted để không xuống DB
-  if (q.includeDeleted !== undefined) {
-    delete q.includeDeleted;
-    this.setQuery(q); // ✅ Cập nhật lại filter cho mongoose
+  // ✅ Nếu chỉ lấy chưa xóa
+  if (q.isDeleted === undefined) {
+    this.where({ isDeleted: { $ne: true } });
   }
 
   next();
@@ -53,9 +54,4 @@ reviewSchema.pre("countDocuments", function (next) {
   next();
 });
 
-reviewSchema.methods.softDelete = function () {
-  this.isDeleted = true;
-  this.deletedAt = new Date();
-  return this.save();
-};
 module.exports = mongoose.model("Review", reviewSchema);

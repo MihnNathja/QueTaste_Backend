@@ -1,3 +1,4 @@
+const { default: mongoose } = require("mongoose");
 const Order = require("../models/Order");
 const Product = require("../models/Product");
 const Review = require("../models/Review");
@@ -216,10 +217,22 @@ class ReviewService {
 
   static async deleteReview(id) {
     try {
-      return await Review.findById(id).then((r) => r?.softDelete());
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        throw new Error("Đánh giá không hợp lệ");
+      }
+
+      const review = await Review.findById(id);
+      if (!review) throw new Error("Không tìm thấy đánh giá để xóa");
+
+      review.isDeleted = true;
+      review.deletedAt = new Date();
+      await review.save();
+
+      return review;
     } catch (err) {
-      console.error("Error in deleteReview:", err.message);
-      throw new Error("Không thể xóa đánh giá");
+      console.error("Error in deleteReview:", err);
+      // chỉ throw lại lỗi thực tế, đừng ném lỗi mới tràn lan
+      throw err;
     }
   }
 }

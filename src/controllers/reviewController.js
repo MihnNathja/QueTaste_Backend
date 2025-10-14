@@ -51,7 +51,7 @@ exports.getAllReviews = async (req, res) => {
 exports.deleteReview = async (req, res) => {
   try {
     //console.log("req.query: ", req.query);
-    const { id } = req.params;
+    const id = req.params.id;
     const reviews = await ReviewService.deleteReview(id);
     return sendResponse(res, 200, true, "Reviews fetched", reviews);
   } catch (err) {
