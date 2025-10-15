@@ -460,6 +460,61 @@ class OrderService {
       notFound,
     };
   }
+
+  static async cancelOrders(listOrderIds) {
+    // Chuẩn hóa & loại trùng ID
+    const ids = [...new Set(listOrderIds)].map(
+      (id) => new mongoose.Types.ObjectId(id)
+    );
+    // Lấy toàn bộ đơn tồn tại trong danh sách
+    const found = await Order.find(
+      { _id: { $in: ids } },
+      { _id: 1, status: 1 }
+    );
+
+    const foundIds = new Set(found.map((o) => String(o._id)));
+
+    // 1) Các đơn không tìm thấy
+    const notFound = listOrderIds.filter((id) => !foundIds.has(String(id)));
+
+    // 2) Các đơn sai trạng thái (khác "new" hoặc quá 30 phút)
+    const skippedInvalid = found
+      .filter((o) => {
+        return !(o.status === "new" || o.status === "confirmed");
+      })
+      .map((o) => ({ id: String(o._id), status: o.status }));
+
+    // 3) Các đơn hợp lệ để cập nhật
+    const validIds = found
+      .filter((o) => {
+        return o.status === "new" || o.status === "confirmed";
+      })
+      .map((o) => o._id);
+
+    // Cập nhật hàng loạt chỉ các đơn đang "new"
+    let updatedCount = 0;
+    if (validIds.length) {
+      const upd = await Order.updateMany(
+        {
+          _id: { $in: validIds },
+          $or: [{ status: "new" }, { status: "confirmed" }],
+        },
+        { $set: { status: "cancelled", updatedAt: new Date() } }
+      );
+      updatedCount = upd.modifiedCount || 0;
+    }
+
+    // Lấy lại các đơn đã cập nhật để trả về
+    const updated =
+      validIds.length > 0 ? await Order.find({ _id: { $in: validIds } }) : [];
+
+    return {
+      updatedCount,
+      updated,
+      skippedInvalid,
+      notFound,
+    };
+  }
 }
 
 module.exports = OrderService;

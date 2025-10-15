@@ -17,6 +17,7 @@ router.post("/momo/notify", orderController.momoNotify);
 router.post("/update-status", orderController.updateStatus);
 router.put("/confirm/:orderId", orderController.confirmOrder);
 router.put("/confirmOrders", orderController.confirmOrders);
+router.put("/cancelOrders", orderController.cancelOrders);
 
 //router.get("/get-all", authMiddleware, adminMiddleware, orderController.getAllOrders)
 router.get("/get-all", orderController.getAllOrders);
