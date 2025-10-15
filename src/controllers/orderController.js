@@ -191,3 +191,36 @@ exports.confirmOrders = async (req, res) => {
     );
   }
 };
+
+exports.cancelOrders = async (req, res) => {
+  try {
+    const { listOrderId } = req.body;
+    console.log(listOrderId);
+
+    if (!Array.isArray(listOrderId) || listOrderId.length === 0) {
+      return sendResponse(
+        res,
+        400,
+        false,
+        "listOrderIds must be a non-empty array"
+      );
+    }
+
+    const orders = await OrderService.cancelOrders(listOrderId);
+    return sendResponse(
+      res,
+      200,
+      true,
+      "Orders cancelled successfully",
+      orders
+    );
+  } catch (err) {
+    console.error("Cancel orders error:", err);
+    return sendResponse(
+      res,
+      500,
+      false,
+      err.message || "Internal server error"
+    );
+  }
+};
