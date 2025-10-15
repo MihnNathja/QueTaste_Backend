@@ -23,7 +23,7 @@ const postSchema = new mongoose.Schema(
         views: { type: Number, default: 0 },
         isPublished: { type: Boolean, default: false },
 
-        likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }], // danh sách user đã like
+        likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     },
     { timestamps: true }
 );
