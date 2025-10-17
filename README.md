@@ -32,4 +32,4 @@ Dự án xây dựng một **website thương mại điện tử** nhằm giới
 - Quản lý danh mục sản phẩm
 - Quản lý đơn hàng
 - Quản lý người dùng
-- Quản lý nội dung giới thiệu, quảng bá
+- Quản lý nội dung giới thiệu, quảng bá, liên hệ
