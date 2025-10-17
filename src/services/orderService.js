@@ -7,6 +7,7 @@ const axios = require("axios");
 const crypto = require("crypto");
 const dayjs = require("dayjs");
 const { default: mongoose } = require("mongoose");
+const CartService = require("./CartService");
 
 const SHIPPING_FEE = 36000;
 
@@ -264,7 +265,7 @@ class OrderService {
     const order = await Order.findOne({ _id: orderId, user: userId });
     if (!order) throw new Error("Không tìm thấy đơn hàng");
 
-    if (["processing"].includes(order.status)) {
+    if (["confirmed", "shipping"].includes(order.status)) {
       order.status = "cancel_requested";
       order.cancelRequest = {
         reason,
@@ -514,6 +515,83 @@ class OrderService {
       skippedInvalid,
       notFound,
     };
+  }
+
+  static async reOrder({ userId, orderId, checkStock = true }) {
+    if (!userId || !orderId) throw new Error("Thiếu userId hoặc orderId");
+
+    const uid = new mongoose.Types.ObjectId(userId);
+    const oid = new mongoose.Types.ObjectId(orderId);
+
+    // 1) Đảm bảo order thuộc về user
+    const order = await Order.findOne({ _id: oid, user: uid }).lean();
+    if (!order)
+      throw new Error("Không tìm thấy đơn hàng hoặc không thuộc về bạn.");
+    if (!order.items?.length)
+      throw new Error("Đơn hàng không có sản phẩm nào.");
+
+    // 2) Load trạng thái sản phẩm hiện tại
+    const productIds = order.items.map((it) => it.product).filter(Boolean);
+    const products = await Product.find(
+      { _id: { $in: productIds } },
+      { _id: 1, stock: 1, isDeleted: 1 }
+    ).lean();
+    const productMap = new Map(products.map((p) => [String(p._id), p]));
+
+    // 3) Lọc item hợp lệ & bị bỏ qua (nếu bật checkStock)
+    const itemsToAdd = [];
+    const skipped = [];
+
+    for (const it of order.items) {
+      const pid = String(it.product);
+      const p = productMap.get(pid);
+
+      if (!p || p.isDeleted) {
+        skipped.push({
+          product: pid,
+          reason: "Sản phẩm không còn tồn tại hoặc đã bị ẩn.",
+        });
+        continue;
+      }
+
+      const qty = Math.max(1, Number(it.quantity || 1));
+      if (checkStock && typeof p.stock === "number" && p.stock < qty) {
+        skipped.push({
+          product: pid,
+          reason:
+            p.stock > 0
+              ? `Không đủ tồn kho (cần ${qty}, còn ${p.stock}).`
+              : "Hết hàng.",
+        });
+        continue;
+      }
+
+      itemsToAdd.push({ product: p._id, quantity: qty });
+    }
+
+    // 5) Gọi addToCart lần lượt; bắt lỗi từng item để không “đổ bể cả mẻ”
+    const added = [];
+    for (const it of itemsToAdd) {
+      try {
+        // console.log("Adđ To Cart when re order");
+        // console.log("userId: ", uid);
+        // console.log("ProductId: ", it.product);
+        // console.log("Quantity: ", it.quantity);
+        await CartService.addToCart(uid, String(it.product), it.quantity);
+        added.push(it);
+      } catch (e) {
+        // Nếu addToCart có validate phụ (vd hết hàng ở thời điểm hiện tại):
+        skipped.push({
+          product: String(it.product),
+          reason: e.message || "Không thể thêm sản phẩm vào giỏ.",
+        });
+      }
+    }
+
+    // 6) Trả về giỏ mới nhất
+    const cart = await CartService.getCart(userId);
+
+    return { cart, added, skipped };
   }
 }
 
