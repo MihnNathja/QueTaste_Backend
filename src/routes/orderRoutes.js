@@ -16,10 +16,11 @@ router.post(
 router.post("/momo/notify", orderController.momoNotify);
 router.post("/update-status", orderController.updateStatus);
 router.put("/confirm/:orderId", orderController.confirmOrder);
-router.put("/confirmOrders", orderController.confirmOrders);
-router.put("/cancelOrders", orderController.cancelOrders);
+
+router.post("/re-order/:orderId", authMiddleware, orderController.reOrder);
 
 //router.get("/get-all", authMiddleware, adminMiddleware, orderController.getAllOrders)
 router.get("/get-all", orderController.getAllOrders);
-
+router.put("/confirmOrders", orderController.confirmOrders);
+router.put("/cancelOrders", orderController.cancelOrders);
 module.exports = router;

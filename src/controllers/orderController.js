@@ -42,7 +42,7 @@ exports.getMyOrders = async (req, res) => {
       page: parseInt(page) || 1,
       limit: parseInt(limit) || 10,
     });
-    console.log(orders);
+    //console.log(orders);
     return sendResponse(res, 201, true, "Get Order successfully", orders);
   } catch (err) {
     console.error("Error in getMyOrders controller:", err.message);
@@ -222,5 +222,20 @@ exports.cancelOrders = async (req, res) => {
       false,
       err.message || "Internal server error"
     );
+  }
+};
+
+exports.reOrder = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const userId = req.user?.id || req.user?._id;
+    console.log("UserId: ", userId);
+    const data = await OrderService.reOrder({
+      userId,
+      orderId,
+    });
+    return sendResponse(res, 200, true, "Re-order thành công", data);
+  } catch (err) {
+    return sendResponse(res, 400, false, err.message);
   }
 };
