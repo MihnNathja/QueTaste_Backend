@@ -403,46 +403,73 @@ class OrderService {
   }
 
   static async confirmOrders(listOrderIds) {
+    // ===== 0) Validate input =====
+    if (!Array.isArray(listOrderIds) || listOrderIds.length === 0) {
+      throw new Error("Danh sách ID đơn hàng trống hoặc không hợp lệ");
+    }
+    if (listOrderIds.length > 500) {
+      throw new Error("Không cho phép xác nhận quá 500 đơn/lần");
+    }
+
     // Chuẩn hóa & loại trùng ID
     const ids = [...new Set(listOrderIds)].map(
       (id) => new mongoose.Types.ObjectId(id)
     );
-    // Lấy toàn bộ đơn tồn tại trong danh sách
+
+    // ===== 1) Tìm theo query =====
     const found = await Order.find(
       { _id: { $in: ids } },
-      { _id: 1, status: 1 }
+      { _id: 1, status: 1, createdAt: 1 }
     );
 
-    const foundIds = new Set(found.map((o) => String(o._id)));
+    // Tập ID tìm thấy
+    const foundIds = new Set();
+    for (const o of found) {
+      foundIds.add(String(o._id));
+    }
 
     // 1) Các đơn không tìm thấy
-    const notFound = listOrderIds.filter((id) => !foundIds.has(String(id)));
+    const notFound = [];
+    for (const id of listOrderIds) {
+      if (!foundIds.has(String(id))) {
+        notFound.push(id);
+      }
+    }
 
-    // 2) Các đơn sai trạng thái (khác "new" hoặc quá 30 phút)
-    const skippedInvalid = found
-      .filter((o) => {
-        const createdMs = Date.parse(o.createdAt);
-        if (!Number.isFinite(createdMs)) return true; // coi như invalid
-        const ageMs = Math.max(0, Date.now() - createdMs);
-        const isNew = o.status === "new";
-        return !isNew || ageMs > THIRTY_MIN;
-      })
-      .map((o) => ({ id: String(o._id), status: o.status }));
+    const nowTs = Date.now();
 
-    // 3) Các đơn hợp lệ để cập nhật
-    const validIds = found
-      .filter((o) => {
-        const createdMs = Date.parse(o.createdAt);
-        if (!Number.isFinite(createdMs)) return false;
-        const ageMs = Math.max(0, Date.now() - createdMs);
-        const isNew = o.status === "new";
-        return isNew && ageMs <= THIRTY_MIN;
-      })
-      .map((o) => o._id);
+    const skippedInvalid = [];
+    const validIds = [];
 
-    // Cập nhật hàng loạt chỉ các đơn đang "new"
+    for (const o of found) {
+      const createdMs = Date.parse(o.createdAt);
+
+      if (!Number.isFinite(createdMs)) {
+        skippedInvalid.push({ id: String(o._id), status: o.status });
+        continue;
+      }
+
+      const ageMs = Math.max(0, nowTs - createdMs);
+      let isNew;
+      if (o.status === "new") {
+        isNew = true;
+      } else {
+        isNew = false;
+      }
+
+      // Điều kiện không hợp lệ: KHÔNG phải "new" HOẶC đã quá 30 phút
+      if (!isNew || ageMs > THIRTY_MIN) {
+        skippedInvalid.push({ id: String(o._id), status: o.status });
+        continue;
+      }
+
+      // Ngược lại là hợp lệ
+      validIds.push(o._id);
+    }
+
+    // ===== 4) Cập nhật hàng loạt chỉ các đơn đang "new" =====
     let updatedCount = 0;
-    if (validIds.length) {
+    if (validIds.length > 0) {
       const upd = await Order.updateMany(
         { _id: { $in: validIds }, status: "new" },
         { $set: { status: "confirmed", updatedAt: new Date() } }
@@ -450,9 +477,11 @@ class OrderService {
       updatedCount = upd.modifiedCount || 0;
     }
 
-    // Lấy lại các đơn đã cập nhật để trả về
-    const updated =
-      validIds.length > 0 ? await Order.find({ _id: { $in: validIds } }) : [];
+    // ===== 5) Lấy lại các đơn đã cập nhật để trả về =====
+    let updated = [];
+    if (validIds.length > 0) {
+      updated = await Order.find({ _id: { $in: validIds } });
+    }
 
     return {
       updatedCount,
@@ -517,7 +546,7 @@ class OrderService {
     };
   }
 
-  static async reOrder({ userId, orderId, checkStock = true }) {
+  static async reOrder({ userId, orderId }) {
     if (!userId || !orderId) throw new Error("Thiếu userId hoặc orderId");
 
     const uid = new mongoose.Types.ObjectId(userId);
@@ -538,7 +567,7 @@ class OrderService {
     ).lean();
     const productMap = new Map(products.map((p) => [String(p._id), p]));
 
-    // 3) Lọc item hợp lệ & bị bỏ qua (nếu bật checkStock)
+    // 3) Lọc item hợp lệ & bị bỏ qua
     const itemsToAdd = [];
     const skipped = [];
 
@@ -555,7 +584,7 @@ class OrderService {
       }
 
       const qty = Math.max(1, Number(it.quantity || 1));
-      if (checkStock && typeof p.stock === "number" && p.stock < qty) {
+      if (typeof p.stock === "number" && p.stock < qty) {
         skipped.push({
           product: pid,
           reason:
@@ -569,7 +598,7 @@ class OrderService {
       itemsToAdd.push({ product: p._id, quantity: qty });
     }
 
-    // 5) Gọi addToCart lần lượt; bắt lỗi từng item để không “đổ bể cả mẻ”
+    // 5) Gọi addToCart lần lượt; bắt lỗi từng item
     const added = [];
     for (const it of itemsToAdd) {
       try {

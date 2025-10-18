@@ -116,7 +116,6 @@ class ReviewService {
   static async getAllReviews({
     productId,
     rating,
-    status,
     search,
     orderBy = "newest", // newest | oldest | highest | lowest
     page = 1,
