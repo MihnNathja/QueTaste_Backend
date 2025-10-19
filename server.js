@@ -6,27 +6,27 @@ const http = require("http");
 const connectDB = require("./src/config/db");
 const { initSocket } = require("./src/config/socket");
 
-//   Load .env & Connect DB  
+//   Load .env & Connect DB
 dotenv.config();
 connectDB();
 require("./src/jobs/couponJob");
 require("./src/jobs/orderJob");
 
-//   Express setup  
+//   Express setup
 const app = express();
 app.use(express.json());
 
-//   CORS  
+//   CORS
 const corsOptions = {
   origin: ["http://localhost:5173"],
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: false, 
+  credentials: false,
 };
 app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
 
-//   Routes  
+//   Routes
 const authRoutes = require("./src/routes/authRoutes");
 const userRoutes = require("./src/routes/userRoutes");
 const productRoutes = require("./src/routes/productRoutes");
@@ -41,6 +41,7 @@ const adminProductRoutes = require("./src/routes/adminProductRoutes");
 const statisticsRoutes = require("./src/routes/statisticsRoutes");
 const notificationRoutes = require("./src/routes/notificationRoutes");
 const chatRoutes = require("./src/routes/chatRoutes");
+const contactRoutes = require("./src/routes/contactRoutes");
 
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
@@ -56,13 +57,12 @@ app.use("/api/coupon", couponRoutes);
 app.use("/api/statistics", statisticsRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/chat", chatRoutes);
+app.use("/api/contact", contactRoutes);
 
-//   HTTP + Socket.IO  
+//   HTTP + Socket.IO
 const server = http.createServer(app);
 initSocket(server);
 
-//   Start server  
+//   Start server
 const PORT = process.env.PORT || 8088;
-server.listen(PORT, () =>
-  console.log(`🚀 Server running on port ${PORT}`)
-);
+server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
