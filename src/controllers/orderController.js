@@ -225,17 +225,73 @@ exports.cancelOrders = async (req, res) => {
   }
 };
 
+// Controller: quyết định message, code, status
 exports.reOrder = async (req, res) => {
   try {
     const { orderId } = req.params;
     const userId = req.user?.id || req.user?._id;
-    console.log("UserId: ", userId);
-    const data = await OrderService.reOrder({
-      userId,
-      orderId,
-    });
-    return sendResponse(res, 200, true, "Re-order thành công", data);
+
+    const {
+      cart,
+      added = [],
+      skipped = [],
+    } = await OrderService.reOrder({ userId, orderId });
+
+    // Phân loại kết quả
+    const addedCnt = added.length;
+    const skippedCnt = skipped.length;
+
+    // 1) Không thêm được gì → 409 (Conflict)
+    if (addedCnt === 0) {
+      return sendResponse(
+        res,
+        409,
+        false,
+        "Không thể mua lại: tất cả sản phẩm đều đã hết hàng.",
+        { cart: null, added, skipped, code: "REORDER_NO_ITEMS" }
+      );
+    }
+
+    // 2) Thành công một phần → 200
+    if (skippedCnt > 0) {
+      return sendResponse(
+        res,
+        200,
+        true,
+        "Mua lại một phần: một số sản phẩm đã được thêm vào giỏ.",
+        { cart, added, skipped, code: "REORDER_OK_PARTIAL" }
+      );
+    }
+
+    // 3) Thành công toàn bộ → 200
+    return sendResponse(
+      res,
+      200,
+      true,
+      "Mua lại thành công: tất cả sản phẩm đã được thêm vào giỏ.",
+      { cart, added, skipped, code: "REORDER_OK_ALL" }
+    );
   } catch (err) {
-    return sendResponse(res, 400, false, err.message);
+    const status =
+      err.httpCode ||
+      (/không tìm thấy|không thuộc/.test(err.message)
+        ? 404
+        : /không có sản phẩm/.test(err.message)
+        ? 422
+        : 400);
+
+    const code =
+      status === 404
+        ? "REORDER_NOT_FOUND"
+        : status === 422
+        ? "REORDER_EMPTY_ORDER"
+        : "REORDER_BAD_REQUEST";
+
+    return sendResponse(res, status, false, err.message, {
+      cart: null,
+      added: [],
+      skipped: err.details?.skipped || [],
+      code,
+    });
   }
 };
