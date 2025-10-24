@@ -1,6 +1,7 @@
 const OrderService = require("../services/orderService");
 const sendResponse = require("../utils/response");
 const { notifyUser, notifyAdmins } = require("../services/notificationService");
+const Order = require("../models/Order");
 
 // POST /api/order/checkout
 exports.checkout = async (req, res) => {
@@ -293,5 +294,83 @@ exports.reOrder = async (req, res) => {
       skipped: err.details?.skipped || [],
       code,
     });
+  }
+};
+
+// Lấy danh sách đơn hàng cho shipper
+exports.getOrdersForShipper = async (req, res) => {
+  try {
+    const orders = await Order.find({ status: "shipping" }).populate(
+      "customer"
+    );
+    res.json({ success: true, data: orders });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Cập nhật sang done_shipping
+exports.markAsDoneShipping = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order)
+      return res
+        .status(404)
+        .json({ success: false, message: "Không tìm thấy đơn hàng" });
+    if (order.status !== "shipping")
+      return res.status(400).json({
+        success: false,
+        message: "Chỉ có thể chuyển từ shipping sang done_shipping",
+      });
+
+    order.status = "done_shipping";
+    await order.save();
+    res.json({ success: true, message: "Cập nhật đơn hàng thành công" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Shipper báo không giao được
+exports.requestCancel = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order)
+      return res
+        .status(404)
+        .json({ success: false, message: "Không tìm thấy đơn hàng" });
+
+    if (order.status !== "shipping")
+      return res
+        .status(400)
+        .json({ success: false, message: "Chỉ hủy đơn đang giao" });
+
+    order.status = "shipper_cancel_requested";
+    await order.save();
+    res.json({ success: true, message: "Đã gửi yêu cầu hủy đơn" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// order.controller.js
+exports.confirmReceived = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order)
+      return res
+        .status(404)
+        .json({ success: false, message: "Không tìm thấy đơn hàng" });
+
+    if (order.status !== "done_shipping")
+      return res
+        .status(400)
+        .json({ success: false, message: "Đơn chưa được giao xong" });
+
+    order.status = "completed";
+    await order.save();
+    res.json({ success: true, message: "Cảm ơn bạn đã xác nhận nhận hàng!" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 };

@@ -4,9 +4,11 @@ const ORDER_STATUS = [
   "new", // Đơn hàng mới
   "confirmed", // Đã xác nhận
   "shipping", // Đang vận chuyển
-  "completed", // Giao thành công
+  "done_shipping", // Hoàn thành giao hàng
+  "completed", // Hoàn tất đơn hàng
   "cancelled", // Đã hủy
   "cancel_requested", // Khách yêu cầu hủy
+  "shipper_cancel_requested", // Shipper yêu cầu hủy
   "refund", // Hoàn trả / hoàn tiền
 ];
 
