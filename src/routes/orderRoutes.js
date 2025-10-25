@@ -51,4 +51,12 @@ router.put(
 );
 
 router.get("/tracking/:orderId", orderController.getTrackingInfo);
+
+router.post(
+  "/call-shipper",
+  authMiddleware,
+  // adminMiddleware,
+  orderController.callShipper
+);
+
 module.exports = router;

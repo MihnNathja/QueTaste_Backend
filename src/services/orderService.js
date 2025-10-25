@@ -693,6 +693,65 @@ class OrderService {
       estimatedDeliveryTime,
     };
   }
+
+  static async callShipperService(listOrderIds) {
+    // ===== 0) Validate input =====
+    if (!Array.isArray(listOrderIds) || listOrderIds.length === 0) {
+      throw new Error("Danh sách ID đơn hàng trống hoặc không hợp lệ");
+    }
+    if (listOrderIds.length > 500) {
+      throw new Error("Không cho phép xử lý quá 500 đơn/lần");
+    }
+
+    // Chuẩn hóa & loại trùng ID
+    const ids = [...new Set(listOrderIds)].map(
+      (id) => new mongoose.Types.ObjectId(id)
+    );
+
+    // ===== 1) Tìm tất cả đơn trong danh sách =====
+    const found = await Order.find(
+      { _id: { $in: ids } },
+      { _id: 1, status: 1 }
+    );
+
+    // ===== 2) Phân loại =====
+    const foundIds = new Set(found.map((o) => String(o._id)));
+
+    // Các đơn không tìm thấy
+    const notFound = listOrderIds.filter((id) => !foundIds.has(String(id)));
+
+    // Các đơn sai trạng thái (không phải "confirmed")
+    const skippedInvalid = found
+      .filter((o) => o.status !== "confirmed")
+      .map((o) => ({ id: String(o._id), status: o.status }));
+
+    // Các đơn hợp lệ (đang "confirmed")
+    const validIds = found
+      .filter((o) => o.status === "confirmed")
+      .map((o) => o._id);
+
+    // ===== 3) Cập nhật hàng loạt các đơn hợp lệ =====
+    let updatedCount = 0;
+    if (validIds.length > 0) {
+      const upd = await Order.updateMany(
+        { _id: { $in: validIds }, status: "confirmed" },
+        { $set: { status: "shipping", updatedAt: new Date() } }
+      );
+      updatedCount = upd.modifiedCount || 0;
+    }
+
+    // ===== 4) Lấy lại các đơn đã cập nhật =====
+    const updated =
+      validIds.length > 0 ? await Order.find({ _id: { $in: validIds } }) : [];
+
+    // ===== 5) Trả kết quả về =====
+    return {
+      updatedCount,
+      updated,
+      skippedInvalid,
+      notFound,
+    };
+  }
 }
 
 module.exports = OrderService;

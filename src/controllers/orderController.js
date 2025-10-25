@@ -389,3 +389,32 @@ exports.getTrackingInfo = async (req, res) => {
     });
   }
 };
+
+exports.callShipper = async (req, res) => {
+  try {
+    console.log(req.body);
+    const { orderIds } = req.body;
+
+    if (!Array.isArray(orderIds) || orderIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Danh sách orderId không hợp lệ",
+      });
+    }
+
+    // Gọi service (chỗ này tạm thời chỉ chuyển trạng thái)
+    const result = await OrderService.callShipperService(orderIds);
+
+    return res.json({
+      success: true,
+      message: "Đã thực hiện yêu cầu chuyển đổi trạng thái đơn hàng",
+      data: result,
+    });
+  } catch (error) {
+    console.error("callShipper error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Lỗi máy chủ",
+    });
+  }
+};
