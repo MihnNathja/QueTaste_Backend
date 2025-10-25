@@ -28,25 +28,27 @@ router.put("/cancelOrders", orderController.cancelOrders);
 router.get(
   "/shipper",
   authMiddleware,
-  isShipper,
+  //isShipper,
   orderController.getOrdersForShipper
 );
 router.put(
   "/:id/update-to-done-shipping",
   authMiddleware,
-  isShipper,
+  //isShipper,
   orderController.markAsDoneShipping
 );
 router.put(
   "/:id/request-cancelled",
   authMiddleware,
-  isShipper,
+  //isShipper,
   orderController.requestCancel
 );
 router.put(
   "/:id/update-to-completed",
   authMiddleware,
-  isUser,
+  //isUser,
   orderController.confirmReceived
 );
+
+router.get("/tracking/:orderId", orderController.getTrackingInfo);
 module.exports = router;

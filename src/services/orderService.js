@@ -13,6 +13,11 @@ const SHIPPING_FEE = 36000;
 
 const THIRTY_MIN = 30 * 60 * 1000;
 
+const ORS_API_KEY = process.env.ORS_API_KEY + "=";
+
+const STORE_ADDRESS =
+  "Số 1 Võ Văn Ngân, Phường Linh Chiểu, Thủ Đức, TP. Hồ Chí Minh";
+
 async function buildOrderItemsAndUpdateStock(cart) {
   let subtotal = 0;
   const orderItems = [];
@@ -621,6 +626,72 @@ class OrderService {
     const cart = await CartService.getCart(userId);
 
     return { cart, added, skipped };
+  }
+
+  static async getTrackingData(orderId) {
+    const order = await Order.findById(orderId);
+    if (!order) throw new Error("Không tìm thấy đơn hàng");
+
+    const customerAddress = `${order.shippingAddress.address}, ${order.shippingAddress.city}`;
+
+    // B1: Geocode địa chỉ → tọa độ
+    const getCoords = async (address) => {
+      const resp = await axios.get(
+        "https://api.openrouteservice.org/geocode/search",
+        {
+          params: { api_key: ORS_API_KEY, text: address },
+        }
+      );
+      if (!resp.data.features?.length) {
+        throw new Error(`Không tìm thấy tọa độ cho: ${address}`);
+      }
+      const [lng, lat] = resp.data.features[0].geometry.coordinates;
+      return { lat, lng };
+    };
+
+    const storeCoords = await getCoords(STORE_ADDRESS);
+    const customerCoords = await getCoords(customerAddress);
+
+    // B2: Tính quãng đường
+    const routeResp = await axios.post(
+      "https://api.openrouteservice.org/v2/directions/driving-car",
+      {
+        coordinates: [
+          [storeCoords.lng, storeCoords.lat],
+          [customerCoords.lng, customerCoords.lat],
+        ],
+      },
+      {
+        headers: {
+          Authorization: ORS_API_KEY,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const route = routeResp.data.routes[0];
+    const distanceMeters = route.summary.distance;
+    const distanceKm = distanceMeters / 1000;
+
+    // B3: Tính thời gian giao hàng ước tính
+    const avgSpeedKmH = 30;
+    const estimateMinutes = Math.round((distanceKm / avgSpeedKmH) * 60);
+
+    const estimatedDeliveryTime = new Date(
+      new Date(order.updatedAt).getTime() + estimateMinutes * 60000
+    );
+
+    // B4: Trả dữ liệu về controller
+    return {
+      orderId: order._id,
+      status: order.status,
+      shippingAddress: order.shippingAddress,
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+      distanceKm: distanceKm.toFixed(2),
+      estimateMinutes,
+      estimatedDeliveryTime,
+    };
   }
 }
 

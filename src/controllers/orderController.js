@@ -300,9 +300,7 @@ exports.reOrder = async (req, res) => {
 // Lấy danh sách đơn hàng cho shipper
 exports.getOrdersForShipper = async (req, res) => {
   try {
-    const orders = await Order.find({ status: "shipping" }).populate(
-      "customer"
-    );
+    const orders = await Order.find({ status: "shipping" });
     res.json({ success: true, data: orders });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -369,8 +367,25 @@ exports.confirmReceived = async (req, res) => {
 
     order.status = "completed";
     await order.save();
-    res.json({ success: true, message: "Cảm ơn bạn đã xác nhận nhận hàng!" });
+    res.json({
+      success: true,
+      message: "Cảm ơn bạn đã xác nhận nhận hàng!",
+      data: order,
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
+  }
+};
+exports.getTrackingInfo = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const trackingData = await OrderService.getTrackingData(orderId);
+    res.status(200).json({ success: true, data: trackingData });
+  } catch (error) {
+    console.error("Tracking error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Không thể lấy dữ liệu theo dõi đơn hàng",
+    });
   }
 };
