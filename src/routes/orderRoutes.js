@@ -1,7 +1,8 @@
 const express = require("express");
 const orderController = require("../controllers/orderController");
-const authMiddleware = require("../middleware/authMiddleware");
 const adminMiddleware = require("../middleware/adminMiddleware");
+const authMiddleware = require("../middleware/authMiddleware");
+const { isUser, isShipper } = require("../middleware/roleMiddleware");
 
 const router = express.Router();
 
@@ -23,4 +24,39 @@ router.post("/re-order/:orderId", authMiddleware, orderController.reOrder);
 router.get("/get-all", orderController.getAllOrders);
 router.put("/confirmOrders", orderController.confirmOrders);
 router.put("/cancelOrders", orderController.cancelOrders);
+
+router.get(
+  "/shipper",
+  authMiddleware,
+  //isShipper,
+  orderController.getOrdersForShipper
+);
+router.put(
+  "/:id/update-to-done-shipping",
+  authMiddleware,
+  //isShipper,
+  orderController.markAsDoneShipping
+);
+router.put(
+  "/:id/request-cancelled",
+  authMiddleware,
+  //isShipper,
+  orderController.requestCancel
+);
+router.put(
+  "/:id/update-to-completed",
+  authMiddleware,
+  //isUser,
+  orderController.confirmReceived
+);
+
+router.get("/tracking/:orderId", orderController.getTrackingInfo);
+
+router.post(
+  "/call-shipper",
+  authMiddleware,
+  // adminMiddleware,
+  orderController.callShipper
+);
+
 module.exports = router;

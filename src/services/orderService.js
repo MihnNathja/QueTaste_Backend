@@ -13,6 +13,11 @@ const SHIPPING_FEE = 36000;
 
 const THIRTY_MIN = 30 * 60 * 1000;
 
+const ORS_API_KEY = process.env.ORS_API_KEY + "=";
+
+const STORE_ADDRESS =
+  "Số 1 Võ Văn Ngân, Phường Linh Chiểu, Thủ Đức, TP. Hồ Chí Minh";
+
 async function buildOrderItemsAndUpdateStock(cart) {
   let subtotal = 0;
   const orderItems = [];
@@ -621,6 +626,131 @@ class OrderService {
     const cart = await CartService.getCart(userId);
 
     return { cart, added, skipped };
+  }
+
+  static async getTrackingData(orderId) {
+    const order = await Order.findById(orderId);
+    if (!order) throw new Error("Không tìm thấy đơn hàng");
+
+    const customerAddress = `${order.shippingAddress.address}, ${order.shippingAddress.city}`;
+
+    // B1: Geocode địa chỉ → tọa độ
+    const getCoords = async (address) => {
+      const resp = await axios.get(
+        "https://api.openrouteservice.org/geocode/search",
+        {
+          params: { api_key: ORS_API_KEY, text: address },
+        }
+      );
+      if (!resp.data.features?.length) {
+        throw new Error(`Không tìm thấy tọa độ cho: ${address}`);
+      }
+      const [lng, lat] = resp.data.features[0].geometry.coordinates;
+      return { lat, lng };
+    };
+
+    const storeCoords = await getCoords(STORE_ADDRESS);
+    const customerCoords = await getCoords(customerAddress);
+
+    // B2: Tính quãng đường
+    const routeResp = await axios.post(
+      "https://api.openrouteservice.org/v2/directions/driving-car",
+      {
+        coordinates: [
+          [storeCoords.lng, storeCoords.lat],
+          [customerCoords.lng, customerCoords.lat],
+        ],
+      },
+      {
+        headers: {
+          Authorization: ORS_API_KEY,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const route = routeResp.data.routes[0];
+    const distanceMeters = route.summary.distance;
+    const distanceKm = distanceMeters / 1000;
+
+    // B3: Tính thời gian giao hàng ước tính
+    const avgSpeedKmH = 30;
+    const estimateMinutes = Math.round((distanceKm / avgSpeedKmH) * 60);
+
+    const estimatedDeliveryTime = new Date(
+      new Date(order.updatedAt).getTime() + estimateMinutes * 60000
+    );
+
+    // B4: Trả dữ liệu về controller
+    return {
+      orderId: order._id,
+      status: order.status,
+      shippingAddress: order.shippingAddress,
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+      distanceKm: distanceKm.toFixed(2),
+      estimateMinutes,
+      estimatedDeliveryTime,
+    };
+  }
+
+  static async callShipperService(listOrderIds) {
+    // ===== 0) Validate input =====
+    if (!Array.isArray(listOrderIds) || listOrderIds.length === 0) {
+      throw new Error("Danh sách ID đơn hàng trống hoặc không hợp lệ");
+    }
+    if (listOrderIds.length > 500) {
+      throw new Error("Không cho phép xử lý quá 500 đơn/lần");
+    }
+
+    // Chuẩn hóa & loại trùng ID
+    const ids = [...new Set(listOrderIds)].map(
+      (id) => new mongoose.Types.ObjectId(id)
+    );
+
+    // ===== 1) Tìm tất cả đơn trong danh sách =====
+    const found = await Order.find(
+      { _id: { $in: ids } },
+      { _id: 1, status: 1 }
+    );
+
+    // ===== 2) Phân loại =====
+    const foundIds = new Set(found.map((o) => String(o._id)));
+
+    // Các đơn không tìm thấy
+    const notFound = listOrderIds.filter((id) => !foundIds.has(String(id)));
+
+    // Các đơn sai trạng thái (không phải "confirmed")
+    const skippedInvalid = found
+      .filter((o) => o.status !== "confirmed")
+      .map((o) => ({ id: String(o._id), status: o.status }));
+
+    // Các đơn hợp lệ (đang "confirmed")
+    const validIds = found
+      .filter((o) => o.status === "confirmed")
+      .map((o) => o._id);
+
+    // ===== 3) Cập nhật hàng loạt các đơn hợp lệ =====
+    let updatedCount = 0;
+    if (validIds.length > 0) {
+      const upd = await Order.updateMany(
+        { _id: { $in: validIds }, status: "confirmed" },
+        { $set: { status: "shipping", updatedAt: new Date() } }
+      );
+      updatedCount = upd.modifiedCount || 0;
+    }
+
+    // ===== 4) Lấy lại các đơn đã cập nhật =====
+    const updated =
+      validIds.length > 0 ? await Order.find({ _id: { $in: validIds } }) : [];
+
+    // ===== 5) Trả kết quả về =====
+    return {
+      updatedCount,
+      updated,
+      skippedInvalid,
+      notFound,
+    };
   }
 }
 
