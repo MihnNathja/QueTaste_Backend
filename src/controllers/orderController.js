@@ -300,7 +300,12 @@ exports.reOrder = async (req, res) => {
 // Lấy danh sách đơn hàng cho shipper
 exports.getOrdersForShipper = async (req, res) => {
   try {
-    const orders = await Order.find({ status: "shipping" });
+    const orders = await Order.find({ status: "shipping" })
+      .populate({
+        path: "items.product",
+        select: "name images",
+      })
+      .sort({ createdAt: -1 });
     res.json({ success: true, data: orders });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
