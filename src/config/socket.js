@@ -31,7 +31,7 @@ function initSocket(server) {
     socket.join(userId.toString());
     if (user.role === "admin") socket.join("admins");
 
-    console.log(`✅ ${userId} connected via ${socket.id}`);
+    console.log(`${userId} connected via ${socket.id}`);
 
     // Track online status
     const prevCount = onlineUsers.get(userId) || 0;

@@ -120,8 +120,8 @@ class ReviewService {
     orderBy = "newest", // newest | oldest | highest | lowest
     page = 1,
     limit = 10,
-    includeDeleted = true, // ✅ admin: mặc định lấy cả đã xoá
-    onlyDeleted = false, // ✅ tùy chọn: chỉ lấy bản đã xoá
+    includeDeleted = true, //  admin: mặc định lấy cả đã xoá
+    onlyDeleted = false, //  tùy chọn: chỉ lấy bản đã xoá
   } = {}) {
     try {
       const query = {};

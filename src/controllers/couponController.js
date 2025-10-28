@@ -1,5 +1,7 @@
 const sendResponse = require("../utils/response");
 const CouponService = require("../services/couponService");
+const { notifyAdmins, notifyUser, notifyAllUsers } = require("../services/notificationService");
+const User = require("../models/User");
 
 // Admin: lấy toàn bộ coupon
 exports.getAdminCoupons = async (req, res) => {
@@ -101,20 +103,40 @@ exports.activateCoupon = async (req, res) => {
 
 // POST /coupons/:id/redeem
 exports.redeemCoupon = async (req, res) => {
-    try {
-        const userId = req.user?.id;
-        if (!userId) return sendResponse(res, 401, false, "Unauthorized");
+  try {
+    const userId = req.user?.id;
+    if (!userId) return sendResponse(res, 401, false, "Unauthorized");
 
-        const userCoupon = await CouponService.redeemCoupon({
-        userId,
-        couponId: req.params.id,
-        });
+    const userCoupon = await CouponService.redeemCoupon({
+      userId,
+      couponId: req.params.id,
+    });
 
-        return sendResponse(res, 201, true, "Coupon redeemed", userCoupon);
-    } catch (err) {
-        return sendResponse(res, 400, false, err.message);
-    }
+    const populatedCoupon = await userCoupon.populate("coupon", "name code value");
+
+    const user = await User.findById(userId).select("personalInfo.fullName");
+
+    await notifyAdmins({
+      type: "coupon",
+      message: `Người dùng ${user.personalInfo.fullName} vừa nhận mã giảm giá "${populatedCoupon.coupon.name}"`,
+      link: "/admin/coupons",
+      mentionedUserId: userId,
+      sendEmail: true,
+    });
+
+    await notifyUser(userId, {
+      type: "coupon",
+      message: `Bạn đã nhận mã giảm giá "${populatedCoupon.coupon.name}" thành công!`,
+      link: "/profile?tab=coupons",
+      sendEmail: true,
+    });
+
+    return sendResponse(res, 201, true, "Coupon redeemed", populatedCoupon);
+  } catch (err) {
+    return sendResponse(res, 400, false, err.message);
+  }
 };
+
 
 // GET /coupons/my
 exports.getMyCoupons = async (req, res) => {

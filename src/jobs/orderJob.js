@@ -16,7 +16,7 @@ cron.schedule("* * * * *", async () => {
       order.status = "confirmed";
       order.confirmedAt = now;
       await order.save();
-      console.log(`✅ Auto-confirmed order ${order._id}`);
+      console.log(`Auto-confirmed order ${order._id}`);
     }
   } catch (err) {
     console.error("Auto confirm job error:", err);
