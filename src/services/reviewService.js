@@ -10,7 +10,7 @@ class ReviewService {
       _id: orderId,
       user: userId,
       "items.product": productId,
-      status: "completed",
+      //status: "completed",
     });
     if (!order) {
       throw new Error(
@@ -46,6 +46,8 @@ class ReviewService {
         },
       },
     ]);
+
+    console.log(stats);
 
     if (stats.length > 0) {
       await Product.findByIdAndUpdate(productId, {
@@ -145,6 +147,7 @@ class ReviewService {
 
       // ====== Tìm kiếm (nội dung, email, tên user) ======
       if (search && search.trim() !== "") {
+        // 1️⃣ Tìm user theo email hoặc tên
         const users = await User.find({
           $or: [
             { email: { $regex: search, $options: "i" } },
@@ -152,9 +155,16 @@ class ReviewService {
           ],
         }).select("_id");
 
+        // 2️⃣ Tìm product theo tên
+        const products = await Product.find({
+          name: { $regex: search, $options: "i" },
+        }).select("_id");
+
+        // 3️⃣ Kết hợp điều kiện tìm
         query.$or = [
-          { comment: { $regex: search, $options: "i" } },
-          { user: { $in: users.map((u) => u._id) } },
+          { comment: { $regex: search, $options: "i" } }, // tìm trong nội dung đánh giá
+          { user: { $in: users.map((u) => u._id) } }, // tìm theo người dùng
+          { product: { $in: products.map((p) => p._id) } }, // tìm theo tên sản phẩm
         ];
       }
 

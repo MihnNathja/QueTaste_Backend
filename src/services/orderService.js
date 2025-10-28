@@ -149,7 +149,7 @@ class OrderService {
     }
 
     const finalAmount = subtotal - discount + SHIPPING_FEE;
-    let orderStatus = "pending";
+    let orderStatus = "new";
     if (paymentMethod === "COD") {
       orderStatus = "new";
     }
