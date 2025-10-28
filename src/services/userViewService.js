@@ -13,7 +13,13 @@ class UserViewService {
     return UserView.find({ userId })
       .sort({ viewedAt: -1 })
       .limit(limit)
-      .populate("productId");
+      .populate({
+        path: "productId",
+        match: { isActive: true, stock: { $gt: 0 } },
+      })
+      .then((views) =>
+        views.filter((v) => v.productId) 
+      );
   }
 
 }

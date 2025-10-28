@@ -2,7 +2,8 @@ const { earnPoints } = require("../services/pointTransactionService");
 const ReviewService = require("../services/reviewService");
 const sendResponse = require("../utils/response");
 const { notifyAdmins } = require("../services/notificationService");
-
+const User = require("../models/User");
+const Product = require("../models/Product");
 const POINT_REVIEW = 50;
 
 // POST /review
@@ -13,10 +14,16 @@ exports.createReview = async (req, res) => {
     const review = await ReviewService.createReview(userId, req.body);
     await earnPoints(userId, POINT_REVIEW, "Điểm thưởng đánh giá sản phẩm", 90);
 
+    const user = await User.findById(userId);
+    const product = await Product.findById(review.product);
+
     await notifyAdmins({
       type: "review",
-      message: `Khách ${req.user.id} vừa đánh giá cho sản phẩm ${review.product}`,
-      link: `/admin/reviews/${review._id}`,
+      message: `Khách ${user.personalInfo.fullName} vừa đánh giá cho sản phẩm ${product.name}`,
+      link: `/admin/reviews`,
+      productId: product._id,
+      mentionedUserId: user._id,
+      sendEmail: true,
     });
 
     return sendResponse(res, 201, true, "Review created", review);

@@ -1,27 +1,32 @@
 const OrderService = require("../services/orderService");
 const sendResponse = require("../utils/response");
-const { notifyUser, notifyAdmins } = require("../services/notificationService");
 const Order = require("../models/Order");
+const { notifyAdmins, notifyUser } = require("../services/notificationService");
+const User = require("../models/User");
 const Product = require("../models/Product");
 
 // POST /api/order/checkout
 exports.checkout = async (req, res) => {
   try {
-    const order = await OrderService.checkout(req.user.id, req.body);
-
-    await notifyUser(req.user.id, {
-      type: "order",
-      message: `Đơn hàng #${order._id} của bạn đã được tạo thành công`,
-      link: `/orders/${order._id}`,
-      sendEmail: true, // gửi email
-      priority: "high",
-    });
+    const userId = req.user.id;
+    const order = await OrderService.checkout(userId, req.body);
+    const user = await User.findById(userId).select("personalInfo.fullName");
 
     await notifyAdmins({
       type: "order",
-      message: `Có đơn hàng mới #${order._id} từ ${req.user.id}`,
-      link: `/admin/orders/${order._id}`,
-      priority: "high",
+      message: `Khách ${user.personalInfo.fullName} vừa đặt đơn hàng mới #${order._id}`,
+      link: "/admin/orders",
+      orderId: order._id,
+      mentionedUserId: userId,
+      sendEmail: true,
+    });
+
+    await notifyUser(userId, {
+      type: "order",
+      message: `Bạn đã đặt thành công đơn hàng #${order._id}`,
+      link: "/profile?tab=orders",
+      orderId: order._id,
+      sendEmail: true,
     });
 
     return sendResponse(res, 201, true, "Order created successfully", order);
@@ -58,19 +63,15 @@ exports.cancelOrder = async (req, res) => {
     const { orderId } = req.params;
     const order = await OrderService.cancelOrder(userId, orderId);
 
-    await notifyUser(req.user.id, {
-      type: "order",
-      message: `Đơn hàng #${order._id} đã được hủy`,
-      link: `/orders/${order._id}`,
-      priority: "high",
-    });
-
-    await notifyAdmins({
-      type: "order",
-      message: `Khách ${req.user.id} vừa hủy đơn hàng #${order._id}`,
-      link: `/admin/orders/${order._id}`,
-      priority: "high",
-    });
+    if (order?.user) {
+      await notifyUser(order.user, {
+        type: "order",
+        message: `Đơn hàng #${order._id} của bạn đã bị hủy`,
+        link: "/profile?tab=orders",
+        orderId: order._id,
+        sendEmail: true,
+      });
+    }
 
     return sendResponse(res, 200, true, "Order cancelled successfully", order);
   } catch (err) {
@@ -84,28 +85,29 @@ exports.requestCancelOrder = async (req, res) => {
     const userId = req.user.id;
     const { orderId } = req.params;
     const { reason } = req.body;
-    console.log(
-      "Requesting cancellation for order:",
-      orderId,
-      "by user:",
-      userId,
-      "with reason:",
-      reason
-    );
-    const order = await OrderService.requestCancelOrder(
-      userId,
-      orderId,
-      reason
-    );
-    return sendResponse(
-      res,
-      200,
-      true,
-      "Order cancellation requested successfully",
-      order
-    );
+    const order = await OrderService.requestCancelOrder(userId, orderId, reason);
+    const user = await User.findById(userId).select("personalInfo.fullName");
+
+    await notifyAdmins({
+      type: "order",
+      message: `Khách ${user.personalInfo.fullName} đã yêu cầu hủy đơn hàng #${order._id}`,
+      link: "/admin/orders",
+      orderId: order._id,
+      mentionedUserId: userId,
+      sendEmail: true,
+    });
+
+    await notifyUser(userId, {
+      type: "order",
+      message: `Bạn đã gửi yêu cầu hủy đơn hàng #${order._id}`,
+      link: "/profile?tab=orders",
+      orderId: order._id,
+      sendEmail: true,
+    });
+
+    return sendResponse(res, 200, true, "Order cancellation requested", order);
   } catch (err) {
-    console.error("Error in requestCancelOrder controller:", err.message);
+    console.error("Error in requestCancelOrder:", err.message);
     return sendResponse(res, 400, false, err.message);
   }
 };
@@ -155,7 +157,18 @@ exports.confirmOrder = async (req, res) => {
   try {
     const { orderId } = req.params;
     const order = await OrderService.updateOrderStatus(orderId, "confirmed");
-    return sendResponse(res, 200, true, "Order status updated", order);
+
+    if (order?.user) {
+      await notifyUser(order.user, {
+        type: "order",
+        message: `Đơn hàng #${order._id} của bạn đã được xác nhận`,
+        link: "/profile?tab=orders",
+        orderId: order._id,
+        sendEmail: true,
+      });
+    }
+
+    return sendResponse(res, 200, true, "Order confirmed", order);
   } catch (err) {
     return sendResponse(res, 400, false, err.message);
   }
@@ -340,17 +353,22 @@ exports.requestCancel = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
     if (!order)
-      return res
-        .status(404)
-        .json({ success: false, message: "Không tìm thấy đơn hàng" });
+      return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng" });
 
     if (order.status !== "shipping")
-      return res
-        .status(400)
-        .json({ success: false, message: "Chỉ hủy đơn đang giao" });
+      return res.status(400).json({ success: false, message: "Chỉ hủy đơn đang giao" });
 
     order.status = "shipper_cancel_requested";
     await order.save();
+
+    await notifyAdmins({
+      type: "order",
+      message: `Shipper báo không giao được đơn hàng #${order._id}`,
+      link: "/admin/orders",
+      orderId: order._id,
+      sendEmail: true,
+    });
+
     res.json({ success: true, message: "Đã gửi yêu cầu hủy đơn" });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -362,14 +380,10 @@ exports.confirmReceived = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
     if (!order)
-      return res
-        .status(404)
-        .json({ success: false, message: "Không tìm thấy đơn hàng" });
+      return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng" });
 
     if (order.status !== "done_shipping")
-      return res
-        .status(400)
-        .json({ success: false, message: "Đơn chưa được giao xong" });
+      return res.status(400).json({ success: false, message: "Đơn chưa được giao xong" });
 
     for (const item of order.items) {
       await Product.findByIdAndUpdate(item.product, {
@@ -379,6 +393,26 @@ exports.confirmReceived = async (req, res) => {
 
     order.status = "completed";
     await order.save();
+
+    const user = await User.findById(order.user).select("personalInfo.fullName");
+
+    await notifyAdmins({
+      type: "order",
+      message: `Khách ${user.personalInfo.fullName} đã xác nhận nhận hàng #${order._id}`,
+      link: "/admin/orders",
+      orderId: order._id,
+      mentionedUserId: order.user,
+      sendEmail: true,
+    });
+
+    await notifyUser(order.user, {
+      type: "order",
+      message: `Cảm ơn bạn đã xác nhận nhận hàng #${order._id}!`,
+      link: "/profile?tab=orders",
+      orderId: order._id,
+      sendEmail: true,
+    });
+
     res.json({
       success: true,
       message: "Cảm ơn bạn đã xác nhận nhận hàng!",
@@ -388,6 +422,7 @@ exports.confirmReceived = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
 exports.getTrackingInfo = async (req, res) => {
   try {
     const { orderId } = req.params;

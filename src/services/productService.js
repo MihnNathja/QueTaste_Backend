@@ -114,6 +114,7 @@ class ProductService {
       _id: { $ne: productId },
       category: product.category,
       isActive: true,
+      stock: { $gt: 0 }, 
     })
       .sort({ createdAt: -1 })
       .limit(limit);
@@ -151,15 +152,15 @@ class ProductService {
     const product = await Product.findById(id);
     if (!product) throw new Error("Product not found");
 
-    console.log("📦 [updateProduct] Incoming data:", data);
-    console.log("📸 [updateProduct] Files:", files?.length || 0);
+    console.log(" [updateProduct] Incoming data:", data);
+    console.log(" [updateProduct] Files:", files?.length || 0);
 
     let existingImages = [];
     if (data.existingImages) {
       try {
         existingImages = JSON.parse(data.existingImages);
       } catch (err) {
-        console.warn("⚠️ existingImages parse error:", err);
+        console.warn(" existingImages parse error:", err);
         existingImages = [];
       }
     } else {
@@ -190,7 +191,7 @@ class ProductService {
     Object.assign(product, updatedData);
     await product.save();
 
-    console.log("✅ Product updated:", product._id);
+    console.log(" Product updated:", product._id);
     return product;
   }
 

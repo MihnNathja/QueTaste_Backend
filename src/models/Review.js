@@ -29,14 +29,14 @@ const reviewSchema = new mongoose.Schema(
 reviewSchema.pre(/^find/, function (next) {
   const q = this.getFilter() || {};
 
-  // ✅ Nếu có includeDeleted: bỏ lọc mặc định
+  //  Nếu có includeDeleted: bỏ lọc mặc định
   if (q.includeDeleted) {
     delete q.includeDeleted;
     this.setQuery(q);
     return next(); // dừng luôn, không thêm filter
   }
 
-  // ✅ Nếu chỉ lấy chưa xóa
+  //  Nếu chỉ lấy chưa xóa
   if (q.isDeleted === undefined) {
     this.where({ isDeleted: { $ne: true } });
   }

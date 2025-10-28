@@ -1,16 +1,16 @@
-// src/config/socket.js
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 
 let ioInstance = null;
-const onlineUsers = new Map(); // { userId -> connectionCount }
+const onlineUsers = new Map();
 
 function initSocket(server) {
   ioInstance = new Server(server, {
     cors: { origin: "*" },
+    pingInterval: 20000,
+    pingTimeout: 60000,
   });
 
-  //  Middleware xác thực token  
   ioInstance.use((socket, next) => {
     try {
       const token = socket.handshake.auth?.token;
@@ -23,71 +23,56 @@ function initSocket(server) {
     }
   });
 
-  //   Khi user kết nối  
   ioInstance.on("connection", (socket) => {
     const user = socket.user;
     if (!user) return;
 
-    // join room theo userId
-    socket.join(user.id.toString());
-
-    // nếu role là admin → join room "admins"
+    const userId = user.id || user._id;
+    socket.join(userId.toString());
     if (user.role === "admin") socket.join("admins");
 
-    // cập nhật trạng thái online
-    const prevCount = onlineUsers.get(user.id) || 0;
-    onlineUsers.set(user.id, prevCount + 1);
+    console.log(`${userId} connected via ${socket.id}`);
+
+    // Track online status
+    const prevCount = onlineUsers.get(userId) || 0;
+    onlineUsers.set(userId, prevCount + 1);
 
     ioInstance.emit("presence", {
-      userId: user.id,
+      userId,
       status: "online",
       count: prevCount + 1,
     });
 
-    //   Khi user ngắt kết nối  
-    socket.on("disconnect", () => {
-      const current = onlineUsers.get(user.id) || 1;
+    // Rejoin rooms on reconnect
+    socket.on("rejoin", () => {
+      socket.join(userId.toString());
+      if (user.role === "admin") socket.join("admins");
+      console.log(`🔁 ${userId} rejoined rooms`);
+    });
+
+    socket.on("disconnect", (reason) => {
+      const current = onlineUsers.get(userId) || 1;
       if (current <= 1) {
-        onlineUsers.delete(user.id);
-        ioInstance.emit("presence", {
-          userId: user.id,
-          status: "offline",
-        });
+        onlineUsers.delete(userId);
+        ioInstance.emit("presence", { userId, status: "offline" });
       } else {
-        onlineUsers.set(user.id, current - 1);
-        ioInstance.emit("presence", {
-          userId: user.id,
-          status: "online",
-          count: current - 1,
-        });
+        onlineUsers.set(userId, current - 1);
+        ioInstance.emit("presence", { userId, status: "online", count: current - 1 });
       }
+      console.log(`🔌 ${userId} disconnected (${reason})`);
     });
   });
 
   return ioInstance;
 }
 
-//   Hàm lấy instance để emit ở service khác  
 function getIO() {
   if (!ioInstance) throw new Error("Socket.io not initialized");
   return ioInstance;
 }
 
-//   Emit helper  
 function emitToUser(userId, event, data) {
-  if (!ioInstance) return;
-  ioInstance.to(userId.toString()).emit(event, data);
+  getIO().to(userId.toString()).emit(event, data);
 }
 
-function emitToAdmins(event, data) {
-  if (!ioInstance) return;
-  ioInstance.to("admins").emit(event, data);
-}
-
-module.exports = {
-  initSocket,
-  getIO,
-  emitToUser,
-  emitToAdmins,
-  onlineUsers,
-};
+module.exports = { initSocket, getIO, emitToUser, onlineUsers };

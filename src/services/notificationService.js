@@ -1,134 +1,256 @@
-// src/services/notificationService.js
 const Notification = require("../models/Notification");
-const { io } = require("../../server");
-const sendMail = require("../utils/sendMail");
 const User = require("../models/User");
+const Product = require("../models/Product");
+const Order = require("../models/Order");
 const { getIO } = require("../config/socket");
-/**
- * Gửi thông báo cho 1 user
- */
-const notifyUser = async (userId, { type, message, link, priority = "normal", sendEmail = false }) => {
-  const notification = await Notification.create({ userId, type, message, link, priority });
+const { sendNotifyMail } = require("../utils/sendMail");
 
-  // emit realtime
-  try {
-    getIO().to(userId.toString()).emit("notification", notification);
-  } catch (e) {
-    console.error("Emit error:", e.message);
-  }
+const populateNotification = (query) =>
+  query
+    .populate({
+      path: "userId",
+      select: "avatar personalInfo.fullName",
+    })
+    .populate({
+      path: "mentionedUserId",
+      select: "avatar personalInfo.fullName",
+    })
+    .populate({
+      path: "productId",
+      select: "name images",
+      model: "Product",
+    })
+    .populate({
+      path: "orderId",
+      select: "_id status totalAmount",
+      model: "Order",
+    });
 
-  // gửi email (không chặn)
-  if (sendEmail) {
+class NotificationService {
+  /**
+   * Gửi thông báo cho 1 user
+   */
+  static async notifyUser(userId, options) {
+    const {
+      type,
+      message,
+      link,
+      priority = "normal",
+      sendEmail = false,
+      productId = null,
+      orderId = null,
+      mentionedUserId = null,
+    } = options;
+
+    // 🟦 Tạo thông báo trong DB
+    const notification = await Notification.create({
+      userId,
+      type,
+      message,
+      link,
+      priority,
+      productId,
+      orderId,
+      mentionedUserId,
+    });
+
+    // 🟦 Populate dữ liệu
+    const populated = await populateNotification(
+      Notification.findById(notification._id)
+    ).lean();
+
+    // 🟩 Gửi realtime qua socket
     try {
+      getIO().to(userId.toString()).emit("notification", populated);
+    } catch (err) {
+      console.error("⚠️ Socket emit error:", err.message);
+    }
+
+    // 🟨 Gửi email nếu có yêu cầu
+    if (sendEmail) {
       const user = await User.findById(userId);
       if (user?.email) {
-        await sendMail(user.email, message);
+        console.log("📧 Sending notification email to:", user.email);
+        await sendNotifyMail(
+          user.email,
+          "📢 Thông báo từ Đặc sản quê mình",
+          message,
+          link ? `${process.env.FRONTEND_URL || "http://localhost:3000"}${link}` : null
+        );
+        console.log("✅ Notification email sent!");
       }
-    } catch (err) {
-      console.error("❌ Error sending email:", err.message);
     }
+
+    return populated;
   }
 
-  return notification;
-};
+  /**
+   * Gửi thông báo đến tất cả admin
+   */
+  static async notifyAdmins(params) {
+    const {
+      type,
+      message,
+      link,
+      priority = "high",
+      sendEmail = false,
+      productId = null,
+      orderId = null,
+      mentionedUserId = null,
+    } = params;
 
-/**
- * Gửi thông báo cho tất cả admin
- */
-const notifyAdmins = async ({ type, message, link, priority = "high" }) => {
-  const admins = await User.find({ role: "admin" }, "_id");
-  const io = getIO();
-  const notifications = [];
+    const admins = await User.find({ role: "admin" }, "_id email");
+    const io = getIO();
+    const notifications = [];
 
-  for (const admin of admins) {
-    const n = await Notification.create({ userId: admin._id, type, message, link, priority });
-    try {
-      io.to(admin._id.toString()).emit("notification", n);
-    } catch (e) {
-      console.error("Emit admin error:", e.message);
+    for (const admin of admins) {
+      const created = await Notification.create({
+        userId: admin._id,
+        type,
+        message,
+        link,
+        priority,
+        productId,
+        orderId,
+        mentionedUserId,
+      });
+
+      const populated = await populateNotification(
+        Notification.findById(created._id)
+      ).lean();
+
+      io.to(admin._id.toString()).emit("notification", populated);
+
+      if (sendEmail && admin.email) {
+        await sendNotifyMail(
+          admin.email,
+          "📢 Thông báo từ Đặc sản quê mình",
+          message,
+          link ? `${process.env.FRONTEND_URL || "http://localhost:3000"}${link}` : null
+        );
+      }
+
+      notifications.push(populated);
     }
-    notifications.push(n);
-  }
 
-  try {
     io.to("admins").emit("notification", { bulk: true, items: notifications });
-  } catch (e) {
-    console.error("Emit room admins error:", e.message);
+    return notifications;
   }
-  return notifications;
-};
 
-/**
- * Broadcast đến tất cả user
- */
-const notifyAllUsers = async ({ type, message, link, priority = "normal" }) => {
-  const users = await User.find({}, "_id");
-  const io = getIO();
-  const notifications = [];
+  /**
+   * Gửi thông báo đến tất cả người dùng
+   */
+  static async notifyAllUsers({
+    type,
+    message,
+    link,
+    priority = "normal",
+    sendEmail = false,
+    productId = null,
+    mentionedUserId = null,
+  }) {
+    const users = await User.find({}, "_id email");
+    const io = getIO();
+    const notifications = [];
 
-  for (const user of users) {
-    const n = await Notification.create({ userId: user._id, type, message, link, priority });
-    try {
-      io.to(user._id.toString()).emit("notification", n);
-    } catch (e) {
-      console.error("Emit all users error:", e.message);
+    for (const user of users) {
+      const notification = await Notification.create({
+        userId: user._id,
+        type,
+        message,
+        link,
+        priority,
+        productId,
+        mentionedUserId,
+      });
+
+      const populated = await populateNotification(
+        Notification.findById(notification._id)
+      ).lean();
+
+      try {
+        io.to(user._id.toString()).emit("notification", populated);
+      } catch (e) {
+        console.error("Emit broadcast error:", e.message);
+      }
+
+      if (sendEmail && user.email) {
+        await sendNotifyMail(
+          user.email,
+          "📢 Thông báo từ Đặc sản quê mình",
+          message,
+          link ? `${process.env.FRONTEND_URL || "http://localhost:3000"}${link}` : null
+        );
+      }
+
+      notifications.push(populated);
     }
-    notifications.push(n);
+
+    return notifications;
   }
 
-  return notifications;
-};
+  /**
+   * Lấy thông báo của user (phân trang)
+   */
+  static async getUserNotifications(userId, { page, limit, unreadOnly, type, priority }) {
+    const skip = (page - 1) * limit;
 
-/**
- * CRUD helpers cho controller
- */
-const getUserNotifications = async (userId, { page, limit, unreadOnly, type, priority }) => {
-  const skip = (page - 1) * limit;
-  const filter = { userId };
-  if (unreadOnly) filter.isRead = false;
-  if (type) filter.type = type;
-  if (priority) filter.priority = priority;
+    const allowedMentionTypes = ["chat", "comment"];
 
-  const [items, total, unreadCount] = await Promise.all([
-    Notification.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
-    Notification.countDocuments(filter),
-    Notification.countDocuments({ userId, isRead: false }),
-  ]);
+    const filter = {
+      $or: [
+        { userId },
+        { $and: [{ mentionedUserId: userId }, { type: { $in: allowedMentionTypes } }] },
+      ],
+    };
 
-  return { items, total, unreadCount };
-};
+    if (unreadOnly) filter.isRead = false;
+    if (type) filter.type = type;
+    if (priority) filter.priority = priority;
 
-const markAsRead = async (userId, id) => {
-  return Notification.findOneAndUpdate(
-    { _id: id, userId },
-    { isRead: true, seenAt: new Date() },
-    { new: true }
-  );
-};
+    const query = Notification.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
 
-const markAsSeen = async (userId, id) => {
-  return Notification.findOneAndUpdate(
-    { _id: id, userId },
-    { seenAt: new Date() },
-    { new: true }
-  );
-};
+    const [items, total, unreadCount] = await Promise.all([
+      populateNotification(query).lean(),
+      Notification.countDocuments(filter),
+      Notification.countDocuments({ userId, isRead: false }),
+    ]);
 
-const readAll = async (userId) => {
-  return Notification.updateMany({ userId, isRead: false }, { isRead: true, seenAt: new Date() });
-};
+    return { items, total, unreadCount };
+  }
 
-const seenAll = async (userId) => {
-  return Notification.updateMany({ userId, seenAt: null }, { seenAt: new Date() });
-};
+  static async markAsRead(userId, id) {
+    return Notification.findOneAndUpdate(
+      { _id: id, userId },
+      { isRead: true, seenAt: new Date() },
+      { new: true }
+    );
+  }
 
-module.exports = {
-  notifyUser,
-  notifyAdmins,
-  notifyAllUsers,
-  getUserNotifications,
-  markAsRead,
-  markAsSeen,
-  readAll,
-  seenAll,
-};
+  static async markAsSeen(userId, id) {
+    return Notification.findOneAndUpdate(
+      { _id: id, userId },
+      { seenAt: new Date() },
+      { new: true }
+    );
+  }
+
+  static async readAll(userId) {
+    return Notification.updateMany(
+      { userId, isRead: false },
+      { isRead: true, seenAt: new Date() }
+    );
+  }
+
+  static async seenAll(userId) {
+    return Notification.updateMany(
+      { userId, seenAt: null },
+      { seenAt: new Date() }
+    );
+  }
+}
+
+module.exports = NotificationService;

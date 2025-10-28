@@ -1,5 +1,15 @@
 const nodemailer = require("nodemailer");
 
+const transporter = nodemailer.createTransport({
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true,
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
 /**
  * Hàm gửi mail chung
  * @param {Object} options - Thông tin email
@@ -76,7 +86,7 @@ const sendOtpMail = async (to, otp) => {
   </html>
   `;
 
-  // ✅ Gọi lại hàm sendMail đã tạo
+  //  Gọi lại hàm sendMail đã tạo
   await sendMail({ to, subject, text, html });
 };
 
@@ -174,6 +184,46 @@ async function sendContactEmail(formData, to = process.env.EMAIL_USER) {
     text,
     html,
   });
+
+  
 }
 
-module.exports = { sendMail, sendOtpMail, sendContactEmail };
+/**
+ * ✉️ Gửi email thông báo (Notification)
+ * @param {string} to - Email người nhận
+ * @param {string} title - Tiêu đề ngắn (VD: "Đơn hàng #123 đã xác nhận")
+ * @param {string} message - Nội dung thông báo
+ * @param {string} [link] - Link để người dùng mở xem
+ */
+const sendNotifyMail = async (to, title, message, link = null) => {
+  const subject = `📢 ${title}`;
+  const safeMsg = escapeHtml(message);
+
+  const html = `
+  <!DOCTYPE html>
+  <html>
+  <head><meta charset="UTF-8" /><title>${subject}</title></head>
+  <body style="margin:0;padding:20px;font-family:Arial,sans-serif;background:#f9f9f9;">
+    <div style="max-width:520px;margin:auto;background:#fff;border-radius:10px;padding:20px;
+                box-shadow:0 2px 6px rgba(0,0,0,0.1);">
+      <h2 style="color:#2563eb;">📢 ${escapeHtml(title)}</h2>
+      <p style="color:#333;line-height:1.6;">${safeMsg}</p>
+      ${
+        link
+          ? `<div style="margin-top:16px;text-align:center;">
+              <a href="${link}" style="background:#2563eb;color:#fff;
+              text-decoration:none;padding:10px 20px;border-radius:6px;display:inline-block;">
+              Xem chi tiết</a></div>`
+          : ""
+      }
+      <p style="text-align:center;font-size:12px;color:#999;margin-top:24px;">
+        Email tự động từ hệ thống Đặc sản quê mình
+      </p>
+    </div>
+  </body>
+  </html>
+  `;
+
+  await sendMail({ to, subject, text: message, html });
+};
+module.exports = { sendMail, sendOtpMail, sendContactEmail, sendNotifyMail };
