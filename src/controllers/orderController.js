@@ -2,6 +2,7 @@ const OrderService = require("../services/orderService");
 const sendResponse = require("../utils/response");
 const { notifyUser, notifyAdmins } = require("../services/notificationService");
 const Order = require("../models/Order");
+const Product = require("../models/Product");
 
 // POST /api/order/checkout
 exports.checkout = async (req, res) => {
@@ -369,6 +370,12 @@ exports.confirmReceived = async (req, res) => {
       return res
         .status(400)
         .json({ success: false, message: "Đơn chưa được giao xong" });
+
+    for (const item of order.items) {
+      await Product.findByIdAndUpdate(item.product, {
+        $inc: { totalSold: item.quantity || 1 },
+      });
+    }
 
     order.status = "completed";
     await order.save();
