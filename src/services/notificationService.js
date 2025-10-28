@@ -9,10 +9,10 @@ const { getIO } = require("../config/socket");
  */
 const notifyUser = async (userId, { type, message, link, priority = "normal", sendEmail = false }) => {
   const notification = await Notification.create({ userId, type, message, link, priority });
-
+  const populated = await Notification.findById(notification._id).lean();
   // emit realtime
   try {
-    getIO().to(userId.toString()).emit("notification", notification);
+    getIO().to(userId.toString()).emit("notification", populated);
   } catch (e) {
     console.error("Emit error:", e.message);
   }

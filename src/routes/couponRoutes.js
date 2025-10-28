@@ -5,15 +5,12 @@ const auth = require("../../src/middleware/authMiddleware");
 
 const router = express.Router();
 
-// 🔹 User-specific
 router.get("/my", auth, couponController.getMyCoupons);       // coupon user đã redeem
 router.get("/user", auth, couponController.getUserCoupons);   // coupon user có thể dùng
 router.post("/:id/redeem", auth, couponController.redeemCoupon);
 
-// 🔹 Admin-specific
 router.get("/admin", auth, couponController.getAdminCoupons);
 
-// 🔹 Common
 router.get("/:id", couponController.getCouponById);
 router.post("/", couponController.createCoupon);
 router.patch("/:id", couponController.updateCoupon);

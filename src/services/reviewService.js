@@ -66,8 +66,8 @@ class ReviewService {
     page = 1,
     limit = 10,
   } = {}) {
-    console.log("Rating: ", rating);
-    console.log("ProductId: ", productId);
+    //console.log("Rating: ", rating);
+    //console.log("ProductId: ", productId);
     try {
       const query = {};
 
