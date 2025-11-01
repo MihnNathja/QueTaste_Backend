@@ -105,7 +105,6 @@ backend/
 │  └─ app.js / server.js
 └─ .env.example        # Biến môi trường
 
----
 
 ## ⚙️ Chạy Backend cục bộ
 
