@@ -118,15 +118,21 @@ backend/
 
 3. Tạo file .env (ví dụ)
 
-   PORT=8080
-   MONGODB_URI=mongodb://localhost:27017/quetaste
-   JWT_SECRET=...
-   JWT_REFRESH_SECRET=...
-   CLOUDINARY_CLOUD_NAME=...
-   CLOUDINARY_API_KEY=...
-   CLOUDINARY_API_SECRET=...
-   SMTP_USER=...
-   SMTP_PASS=...
+   # MongoDB connection string
+   MONGO_URI=mongodb+srv://<db_username>:<db_password>@<cluster-name>.<cluster-id>.mongodb.net/<database-name>
+
+   # JWT secrets
+   JWT_SECRET=<your_jwt_secret>
+   JWT_REFRESH_SECRET=<your_jwt_refresh_secret>
+   
+   # Email service credentials
+   EMAIL_USER=<your_email_address>
+   EMAIL_PASS=<your_email_app_password>
+   
+   # Cloudinary config (lưu và truy xuất ảnh sản phẩm)
+   CLOUDINARY_CLOUD_NAME=<your_cloudinary_cloud_name>
+   CLOUDINARY_API_KEY=<your_cloudinary_api_key>
+   CLOUDINARY_API_SECRET=<your_cloudinary_api_secret>
 
 4. Chạy server dev
    npm run dev
