@@ -18,6 +18,7 @@ class AuthService {
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) throw new Error("Invalid credentials");
+    if (!user.isVerified) throw new Error("Account not verified");
 
     const tokens = generateToken(user);
 
