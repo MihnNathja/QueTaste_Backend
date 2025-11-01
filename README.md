@@ -92,6 +92,7 @@ Hệ thống hỗ trợ nhiều vai trò: Khách vãng lai, Khách hàng, Quản
 
 ## 📂 Cấu trúc thư mục (rút gọn)
 
+```txt
 backend/
 ├─ src/
 │  ├─ models/          # User, Product, Order, Cart, Review, Coupon, Message, ...
