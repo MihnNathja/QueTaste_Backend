@@ -108,6 +108,7 @@ backend/
 
 ## ⚙️ Chạy Backend cục bộ
 
+```txt
 1. Clone repo
    git clone https://github.com/MihnNathja/QueTaste.git
    cd QueTaste/backend
