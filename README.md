@@ -1,7 +1,7 @@
-# 🌾 QueTaste Backend – API thương mại điện tử đặc sản vùng miền
+# 🌾 QueTaste Backend – Thương mại điện tử đặc sản vùng miền
 
 QueTaste là hệ thống bán đặc sản quê hương theo mô hình thương mại điện tử.
-Backend cung cấp REST API cho web app: quản lý sản phẩm, giỏ hàng, đơn hàng, thanh toán, người dùng và quản trị.
+Backend cung cấp REST API cho website giúp: quản lý sản phẩm, giỏ hàng, đơn hàng, thanh toán, người dùng và quản trị.
 Hệ thống hỗ trợ nhiều vai trò: Khách vãng lai, Khách hàng, Quản trị viên và Nhân viên giao hàng.
 
 ---
