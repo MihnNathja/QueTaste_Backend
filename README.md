@@ -104,7 +104,7 @@ backend/
 │  ├─ config/          # DB connection, Cloudinary, Socket
 │  └─ app.js / server.js
 └─ .env.example        # Biến môi trường
-
+```
 
 ## ⚙️ Chạy Backend cục bộ
 
