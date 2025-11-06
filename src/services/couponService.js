@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Coupon = require("../models/Coupon");
 const UserCoupon = require("../models/UserCoupon");
 const PointTransaction = require("../models/PointTransaction");
+const User = require("../models/User");
 
 class CouponService {
     // List + filter + pagination
@@ -225,6 +226,9 @@ class CouponService {
             need -= take;
             }
         }
+        const user = await User.findById(userId).session(session);
+        user.pointsBalance -= cost;
+        
         if (need > 0) throw new Error("Không thể trừ điểm (race condition?)");
 
         // Ghi 1 transaction spend (để audit)
@@ -282,7 +286,7 @@ class CouponService {
             throw new Error("Số lượng đổi đã hết (race condition)");
             }
         }
-
+        await user.save({ session });
         await session.commitTransaction();
         session.endSession();
         return userCoupon;

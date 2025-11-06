@@ -382,8 +382,8 @@ exports.confirmReceived = async (req, res) => {
     if (!order)
       return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng" });
 
-    if (order.status !== "done_shipping")
-      return res.status(400).json({ success: false, message: "Đơn chưa được giao xong" });
+    // if (order.status !== "done_shipping")
+    //   return res.status(400).json({ success: false, message: "Đơn chưa được giao xong" });
 
     for (const item of order.items) {
       await Product.findByIdAndUpdate(item.product, {

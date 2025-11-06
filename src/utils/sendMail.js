@@ -195,7 +195,7 @@ async function sendContactEmail(formData, to = process.env.EMAIL_USER) {
  * @param {string} message - Nội dung thông báo
  * @param {string} [link] - Link để người dùng mở xem
  */
-const sendNotifyMail = async (to, title, message, link = null) => {
+const sendNotifyMail = async ( to = process.env.EMAIL_USER, title, message, link = null) => {
   const subject = `📢 ${title}`;
   const safeMsg = escapeHtml(message);
 

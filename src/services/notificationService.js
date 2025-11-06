@@ -42,7 +42,7 @@ class NotificationService {
       mentionedUserId = null,
     } = options;
 
-    // 🟦 Tạo thông báo trong DB
+    // Tạo thông báo trong DB
     const notification = await Notification.create({
       userId,
       type,
@@ -54,19 +54,19 @@ class NotificationService {
       mentionedUserId,
     });
 
-    // 🟦 Populate dữ liệu
+    // Populate dữ liệu
     const populated = await populateNotification(
       Notification.findById(notification._id)
     ).lean();
 
-    // 🟩 Gửi realtime qua socket
+    // Gửi realtime qua socket
     try {
       getIO().to(userId.toString()).emit("notification", populated);
     } catch (err) {
       console.error("⚠️ Socket emit error:", err.message);
     }
 
-    // 🟨 Gửi email nếu có yêu cầu
+    // Gửi email nếu có yêu cầu
     if (sendEmail) {
       const user = await User.findById(userId);
       if (user?.email) {
@@ -123,7 +123,7 @@ class NotificationService {
 
       if (sendEmail && admin.email) {
         await sendNotifyMail(
-          admin.email,
+          process.env.EMAIL_USER,
           "📢 Thông báo từ Đặc sản quê mình",
           message,
           link ? `${process.env.FRONTEND_URL || "http://localhost:3000"}${link}` : null
