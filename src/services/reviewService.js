@@ -147,7 +147,7 @@ class ReviewService {
 
       // ====== Tìm kiếm (nội dung, email, tên user) ======
       if (search && search.trim() !== "") {
-        // 1️⃣ Tìm user theo email hoặc tên
+        //  Tìm user theo email hoặc tên
         const users = await User.find({
           $or: [
             { email: { $regex: search, $options: "i" } },
@@ -155,12 +155,12 @@ class ReviewService {
           ],
         }).select("_id");
 
-        // 2️⃣ Tìm product theo tên
+        //  Tìm product theo tên
         const products = await Product.find({
           name: { $regex: search, $options: "i" },
         }).select("_id");
 
-        // 3️⃣ Kết hợp điều kiện tìm
+        //  Kết hợp điều kiện tìm
         query.$or = [
           { comment: { $regex: search, $options: "i" } }, // tìm trong nội dung đánh giá
           { user: { $in: users.map((u) => u._id) } }, // tìm theo người dùng
